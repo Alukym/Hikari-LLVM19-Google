@@ -947,9 +947,8 @@ void SIFixSGPRCopies::analyzeVGPRToSGPRCopy(MachineInstr* MI) {
         (Inst->isCopy() && Inst->getOperand(0).getReg() == AMDGPU::SCC)) {
       auto I = Inst->getIterator();
       auto E = Inst->getParent()->end();
-      while (++I != E &&
-             !I->findRegisterDefOperand(AMDGPU::SCC, /*TRI=*/nullptr)) {
-        if (I->readsRegister(AMDGPU::SCC, /*TRI=*/nullptr))
+      while (++I != E && !I->findRegisterDefOperand(AMDGPU::SCC)) {
+        if (I->readsRegister(AMDGPU::SCC))
           Users.push_back(&*I);
       }
     } else if (Inst->getNumExplicitDefs() != 0) {

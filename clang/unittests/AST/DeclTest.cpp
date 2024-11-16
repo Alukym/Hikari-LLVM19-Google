@@ -429,7 +429,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator new"),
             Ctx));
   ASSERT_TRUE(SizedOperatorNew->getOwningModule());
-  EXPECT_TRUE(SizedOperatorNew->isFromExplicitGlobalModule());
+  EXPECT_TRUE(SizedOperatorNew->getOwningModule()->isGlobalModule());
 
   // void* operator new(std::size_t, std::align_val_t);
   auto *SizedAlignedOperatorNew = selectFirst<FunctionDecl>(
@@ -441,7 +441,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator new"),
             Ctx));
   ASSERT_TRUE(SizedAlignedOperatorNew->getOwningModule());
-  EXPECT_TRUE(SizedAlignedOperatorNew->isFromExplicitGlobalModule());
+  EXPECT_TRUE(SizedAlignedOperatorNew->getOwningModule()->isGlobalModule());
 
   // void* operator new[](std::size_t);
   auto *SizedArrayOperatorNew = selectFirst<FunctionDecl>(
@@ -451,7 +451,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator new[]"),
             Ctx));
   ASSERT_TRUE(SizedArrayOperatorNew->getOwningModule());
-  EXPECT_TRUE(SizedArrayOperatorNew->isFromExplicitGlobalModule());
+  EXPECT_TRUE(SizedArrayOperatorNew->getOwningModule()->isGlobalModule());
 
   // void* operator new[](std::size_t, std::align_val_t);
   auto *SizedAlignedArrayOperatorNew = selectFirst<FunctionDecl>(
@@ -464,7 +464,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
             Ctx));
   ASSERT_TRUE(SizedAlignedArrayOperatorNew->getOwningModule());
   EXPECT_TRUE(
-      SizedAlignedArrayOperatorNew->isFromExplicitGlobalModule());
+      SizedAlignedArrayOperatorNew->getOwningModule()->isGlobalModule());
 
   // void operator delete(void*) noexcept;
   auto *Delete = selectFirst<FunctionDecl>(
@@ -475,7 +475,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator delete"),
             Ctx));
   ASSERT_TRUE(Delete->getOwningModule());
-  EXPECT_TRUE(Delete->isFromExplicitGlobalModule());
+  EXPECT_TRUE(Delete->getOwningModule()->isGlobalModule());
 
   // void operator delete(void*, std::align_val_t) noexcept;
   auto *AlignedDelete = selectFirst<FunctionDecl>(
@@ -487,7 +487,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator delete"),
             Ctx));
   ASSERT_TRUE(AlignedDelete->getOwningModule());
-  EXPECT_TRUE(AlignedDelete->isFromExplicitGlobalModule());
+  EXPECT_TRUE(AlignedDelete->getOwningModule()->isGlobalModule());
 
   // Sized deallocation is not enabled by default. So we skip it here.
 
@@ -500,7 +500,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator delete[]"),
             Ctx));
   ASSERT_TRUE(ArrayDelete->getOwningModule());
-  EXPECT_TRUE(ArrayDelete->isFromExplicitGlobalModule());
+  EXPECT_TRUE(ArrayDelete->getOwningModule()->isGlobalModule());
 
   // void operator delete[](void*, std::align_val_t) noexcept;
   auto *AlignedArrayDelete = selectFirst<FunctionDecl>(
@@ -512,7 +512,7 @@ TEST(Decl, ImplicitlyDeclaredAllocationFunctionsInModules) {
                 .bind("operator delete[]"),
             Ctx));
   ASSERT_TRUE(AlignedArrayDelete->getOwningModule());
-  EXPECT_TRUE(AlignedArrayDelete->isFromExplicitGlobalModule());
+  EXPECT_TRUE(AlignedArrayDelete->getOwningModule()->isGlobalModule());
 }
 
 TEST(Decl, TemplateArgumentDefaulted) {

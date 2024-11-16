@@ -71,7 +71,8 @@ PreservedAnalyses KCFIPass::run(Function &F, FunctionAnalysisManager &AM) {
                            "compatible with -fsanitize=kcfi on this target"));
 
   IntegerType *Int32Ty = Type::getInt32Ty(Ctx);
-  MDNode *VeryUnlikelyWeights = MDBuilder(Ctx).createUnlikelyBranchWeights();
+  MDNode *VeryUnlikelyWeights =
+      MDBuilder(Ctx).createBranchWeights(1, (1U << 20) - 1);
   Triple T(M.getTargetTriple());
 
   for (CallInst *CI : KCFICalls) {

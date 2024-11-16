@@ -263,8 +263,7 @@ class PPCBoolRetToInt : public FunctionPass {
     Value *IntRetVal = BoolToIntMap[U];
     Type *Int1Ty = Type::getInt1Ty(U->getContext());
     auto *I = cast<Instruction>(U.getUser());
-    Value *BackToBool =
-        new TruncInst(IntRetVal, Int1Ty, "backToBool", I->getIterator());
+    Value *BackToBool = new TruncInst(IntRetVal, Int1Ty, "backToBool", I);
     U.set(BackToBool);
 
     return true;

@@ -391,6 +391,7 @@ def ReduceOp : LinalgStructuredBase_Op<"reduce", [
 
 def TransposeOp : LinalgStructuredBase_Op<"transpose", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
+    SameVariadicOperandSize,
     SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Transpose operator";
   let description = [{
@@ -469,6 +470,7 @@ def TransposeOp : LinalgStructuredBase_Op<"transpose", [
 
 def BroadcastOp : LinalgStructuredBase_Op<"broadcast", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
+    SameVariadicOperandSize,
     SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Static broadcast operator";
   let description = [{

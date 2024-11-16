@@ -220,11 +220,8 @@ public:
       if (MightDeallocatePolymorphic(*entity, DeallocateNonCoarray)) {
         SayDeallocateOfPolymorph(variable.GetSource(), *entity, reason);
       }
-      if (const auto *assignment{GetAssignment(stmt)}) {
-        const auto &lhs{assignment->lhs};
-        if (const Symbol * impure{HasImpureFinal(*entity, lhs.Rank())}) {
-          SayDeallocateWithImpureFinal(*entity, reason, *impure);
-        }
+      if (const Symbol * impure{HasImpureFinal(*entity)}) {
+        SayDeallocateWithImpureFinal(*entity, reason, *impure);
       }
     }
     if (const auto *assignment{GetAssignment(stmt)}) {
@@ -438,18 +435,6 @@ public:
       CheckForallIndexesUsed(*assignment);
       CheckForImpureCall(assignment->lhs);
       CheckForImpureCall(assignment->rhs);
-
-      if (IsVariable(assignment->lhs)) {
-        if (const Symbol * symbol{GetLastSymbol(assignment->lhs)}) {
-          if (auto impureFinal{
-                  HasImpureFinal(*symbol, assignment->lhs.Rank())}) {
-            context_.SayWithDecl(*symbol, parser::FindSourceLocation(stmt),
-                "Impure procedure '%s' is referenced by finalization in a %s"_err_en_US,
-                impureFinal->name(), LoopKindName());
-          }
-        }
-      }
-
       if (const auto *proc{
               std::get_if<evaluate::ProcedureRef>(&assignment->u)}) {
         CheckForImpureCall(*proc);
@@ -540,8 +525,7 @@ private:
     CheckDoExpression(bounds.upper);
     if (bounds.step) {
       CheckDoExpression(*bounds.step);
-      if (IsZero(*bounds.step) &&
-          context_.ShouldWarn(common::UsageWarning::ZeroDoStep)) {
+      if (IsZero(*bounds.step)) {
         context_.Say(bounds.step->thing.value().source,
             "DO step expression should not be zero"_warn_en_US);
       }
@@ -792,8 +776,7 @@ private:
           },
           assignment.u);
       for (const Symbol &index : indexVars) {
-        if (symbols.count(index) == 0 &&
-            context_.ShouldWarn(common::UsageWarning::UnusedForallIndex)) {
+        if (symbols.count(index) == 0) {
           context_.Say("FORALL index variable '%s' not used on left-hand side"
                        " of assignment"_warn_en_US,
               index.name());

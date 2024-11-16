@@ -63,6 +63,7 @@ private:
   bool visitSwitchStmt(const SwitchStmt *S);
   bool visitCaseStmt(const CaseStmt *S);
   bool visitDefaultStmt(const DefaultStmt *S);
+  bool visitAsmStmt(const AsmStmt *S);
   bool visitAttributedStmt(const AttributedStmt *S);
   bool visitCXXTryStmt(const CXXTryStmt *S);
 
@@ -82,7 +83,6 @@ private:
   OptLabelTy DefaultLabel;
 };
 
-extern template class ByteCodeStmtGen<ByteCodeEmitter>;
 extern template class ByteCodeExprGen<EvalEmitter>;
 
 } // namespace interp

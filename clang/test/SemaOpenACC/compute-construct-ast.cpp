@@ -12,16 +12,14 @@ void NormalFunc() {
   // CHECK-LABEL: NormalFunc
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}parallel
-  // CHECK-NEXT: default(none)
   // CHECK-NEXT: CompoundStmt
-#pragma acc parallel default(none)
+#pragma acc parallel
   {
 #pragma acc parallel
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}parallel
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}parallel
-  // CHECK-NEXT: default(present)
   // CHECK-NEXT: CompoundStmt
-#pragma acc parallel default(present)
+#pragma acc parallel
     {}
   }
   // FIXME: Add a test once we have clauses for this.
@@ -52,12 +50,12 @@ void NormalFunc() {
 
 template<typename T>
 void TemplFunc() {
-#pragma acc parallel default(none)
+#pragma acc parallel
   {
     typename T::type I;
   }
 
-#pragma acc serial default(present)
+#pragma acc serial
   {
     typename T::type I;
   }
@@ -74,12 +72,10 @@ void TemplFunc() {
   // CHECK-NEXT: FunctionDecl
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}parallel
-  // CHECK-NEXT: default(none)
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: DeclStmt
   // CHECK-NEXT: VarDecl{{.*}} I 'typename T::type'
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}serial
-  // CHECK-NEXT: default(present)
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: DeclStmt
   // CHECK-NEXT: VarDecl{{.*}} I 'typename T::type'
@@ -95,12 +91,10 @@ void TemplFunc() {
   // CHECK-NEXT: CXXRecord
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}parallel
-  // CHECK-NEXT: default(none)
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: DeclStmt
   // CHECK-NEXT: VarDecl{{.*}} I 'typename S::type':'int'
   // CHECK-NEXT: OpenACCComputeConstruct {{.*}}serial
-  // CHECK-NEXT: default(present)
   // CHECK-NEXT: CompoundStmt
   // CHECK-NEXT: DeclStmt
   // CHECK-NEXT: VarDecl{{.*}} I 'typename S::type':'int'

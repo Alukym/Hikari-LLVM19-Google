@@ -9,8 +9,8 @@
 #include "MissingStdForwardCheck.h"
 #include "../utils/Matchers.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/ExprConcepts.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/Basic/IdentifierTable.h"
 
 using namespace clang::ast_matchers;
 
@@ -79,11 +79,6 @@ AST_MATCHER_P(LambdaExpr, hasCaptureDefaultKind, LambdaCaptureDefault, Kind) {
   return Node.getCaptureDefault() == Kind;
 }
 
-AST_MATCHER(VarDecl, hasIdentifier) {
-  const IdentifierInfo *ID = Node.getIdentifier();
-  return ID != NULL && !ID->isPlaceholder();
-}
-
 } // namespace
 
 void MissingStdForwardCheck::registerMatchers(MatchFinder *Finder) {
@@ -130,14 +125,12 @@ void MissingStdForwardCheck::registerMatchers(MatchFinder *Finder) {
                    hasAncestor(expr(hasUnevaluatedContext())))));
 
   Finder->addMatcher(
-      parmVarDecl(
-          parmVarDecl().bind("param"), hasIdentifier(),
-          unless(hasAttr(attr::Kind::Unused)), isTemplateTypeParameter(),
-          hasAncestor(functionDecl().bind("func")),
-          hasAncestor(functionDecl(
-              isDefinition(), equalsBoundNode("func"), ToParam,
-              unless(anyOf(isDeleted(),
-                           hasDescendant(std::move(ForwardCallMatcher))))))),
+      parmVarDecl(parmVarDecl().bind("param"), isTemplateTypeParameter(),
+                  hasAncestor(functionDecl().bind("func")),
+                  hasAncestor(functionDecl(
+                      isDefinition(), equalsBoundNode("func"), ToParam,
+                      unless(anyOf(isDeleted(), hasDescendant(std::move(
+                                                    ForwardCallMatcher))))))),
       this);
 }
 

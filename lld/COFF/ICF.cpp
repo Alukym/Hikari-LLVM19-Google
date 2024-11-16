@@ -178,7 +178,7 @@ bool ICF::equalsConstant(const SectionChunk *a, const SectionChunk *b) {
          a->getSectionName() == b->getSectionName() &&
          a->header->SizeOfRawData == b->header->SizeOfRawData &&
          a->checksum == b->checksum && a->getContents() == b->getContents() &&
-         a->getMachine() == b->getMachine() && assocEquals(a, b);
+         assocEquals(a, b);
 }
 
 // Compare "moving" part of two sections, namely relocation targets.

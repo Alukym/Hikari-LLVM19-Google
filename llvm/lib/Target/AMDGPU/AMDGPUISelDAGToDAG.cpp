@@ -132,7 +132,6 @@ bool AMDGPUDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
   }
 #endif
   Subtarget = &MF.getSubtarget<GCNSubtarget>();
-  Subtarget->checkSubtargetFeatures(MF.getFunction());
   Mode = SIModeRegisterDefaults(MF.getFunction(), *Subtarget);
   return SelectionDAGISel::runOnMachineFunction(MF);
 }
@@ -3557,10 +3556,7 @@ bool AMDGPUDAGToDAGISel::isUniformLoad(const SDNode *N) const {
   if (N->isDivergent() && !AMDGPUInstrInfo::isUniformMMO(MMO))
     return false;
 
-  return MMO->getSize().hasValue() &&
-         Ld->getAlign() >=
-             Align(std::min(MMO->getSize().getValue().getKnownMinValue(),
-                            uint64_t(4))) &&
+  return Ld->getAlign() >= Align(std::min(MMO->getSize(), uint64_t(4))) &&
          ((Ld->getAddressSpace() == AMDGPUAS::CONSTANT_ADDRESS ||
            Ld->getAddressSpace() == AMDGPUAS::CONSTANT_ADDRESS_32BIT) ||
           (Subtarget->getScalarizeGlobalBehavior() &&

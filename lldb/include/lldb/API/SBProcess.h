@@ -562,8 +562,6 @@ public:
 
   lldb::SBScriptObject GetScriptedImplementation();
 
-  void GetStatus(SBStream &status);
-
 protected:
   friend class SBAddress;
   friend class SBBreakpoint;

@@ -704,9 +704,6 @@ void APValue::printPretty(raw_ostream &Out, const PrintingPolicy &Policy,
     return;
   }
 
-  if (const auto *AT = Ty->getAs<AtomicType>())
-    Ty = AT->getValueType();
-
   switch (getKind()) {
   case APValue::None:
     Out << "<out of lifetime>";
@@ -908,8 +905,7 @@ void APValue::printPretty(raw_ostream &Out, const PrintingPolicy &Policy,
     for (const auto *FI : RD->fields()) {
       if (!First)
         Out << ", ";
-      if (FI->isUnnamedBitField())
-        continue;
+      if (FI->isUnnamedBitfield()) continue;
       getStructField(FI->getFieldIndex()).
         printPretty(Out, Policy, FI->getType(), Ctx);
       First = false;

@@ -23,6 +23,7 @@
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-forward.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/FormatVariadic.h"
 
 #include <regex>
 
@@ -93,10 +94,10 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
 
   StackFrame *frame = m_exe_ctx.GetFramePtr();
 
-  // Either the language was explicitly specified, or we check the frame.
+  // Either Swift was explicitly specified, or the frame is Swift.
   lldb::LanguageType language = m_expr_options.language;
   if (language == lldb::eLanguageTypeUnknown && frame)
-    language = frame->GuessLanguage().AsLanguageType();
+    language = frame->GuessLanguage();
 
   // Add a hint if object description was requested, but no description
   // function was implemented.
@@ -129,19 +130,6 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
     }
   };
 
-  // Dump `valobj` according to whether `po` was requested or not.
-  auto dump_val_object = [&](ValueObject &valobj) {
-    if (is_po) {
-      StreamString temp_result_stream;
-      valobj.Dump(temp_result_stream, dump_options);
-      llvm::StringRef output = temp_result_stream.GetString();
-      maybe_add_hint(output);
-      result.GetOutputStream() << output;
-    } else {
-      valobj.Dump(result.GetOutputStream(), dump_options);
-    }
-  };
-
   // First, try `expr` as the name of a frame variable.
   if (frame) {
     auto valobj_sp = frame->FindVariable(ConstString(expr));
@@ -159,23 +147,21 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
                                         flags, expr);
       }
 
-      dump_val_object(*valobj_sp);
+      if (is_po) {
+        StreamString temp_result_stream;
+        valobj_sp->Dump(temp_result_stream, dump_options);
+        llvm::StringRef output = temp_result_stream.GetString();
+        maybe_add_hint(output);
+        result.GetOutputStream() << output;
+      } else {
+        valobj_sp->Dump(result.GetOutputStream(), dump_options);
+      }
       result.SetStatus(eReturnStatusSuccessFinishResult);
       return;
     }
   }
 
-  // Second, try `expr` as a persistent variable.
-  if (expr.starts_with("$"))
-    if (auto *state = target.GetPersistentExpressionStateForLanguage(language))
-      if (auto var_sp = state->GetVariable(expr))
-        if (auto valobj_sp = var_sp->GetValueObject()) {
-          dump_val_object(*valobj_sp);
-          result.SetStatus(eReturnStatusSuccessFinishResult);
-          return;
-        }
-
-  // Third, and lastly, try `expr` as a source expression to evaluate.
+  // Second, also lastly, try `expr` as a source expression to evaluate.
   {
     auto *exe_scope = m_exe_ctx.GetBestExecutionContextScope();
     ValueObjectSP valobj_sp;
@@ -201,8 +187,17 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
                                         expr);
       }
 
-      if (valobj_sp->GetError().GetError() != UserExpression::kNoResult)
-        dump_val_object(*valobj_sp);
+      if (valobj_sp->GetError().GetError() != UserExpression::kNoResult) {
+        if (is_po) {
+          StreamString temp_result_stream;
+          valobj_sp->Dump(temp_result_stream, dump_options);
+          llvm::StringRef output = temp_result_stream.GetString();
+          maybe_add_hint(output);
+          result.GetOutputStream() << output;
+        } else {
+          valobj_sp->Dump(result.GetOutputStream(), dump_options);
+        }
+      }
 
       if (suppress_result)
         if (auto result_var_sp =

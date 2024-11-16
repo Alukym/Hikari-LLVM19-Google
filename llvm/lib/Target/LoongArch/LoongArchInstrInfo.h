@@ -90,9 +90,6 @@ protected:
 
 namespace LoongArch {
 
-// Returns true if this is the sext.w pattern, addi.w rd, rs, 0.
-bool isSEXT_W(const MachineInstr &MI);
-
 // Mask assignments for floating-point.
 static constexpr unsigned FClassMaskSignalingNaN = 0x001;
 static constexpr unsigned FClassMaskQuietNaN = 0x002;

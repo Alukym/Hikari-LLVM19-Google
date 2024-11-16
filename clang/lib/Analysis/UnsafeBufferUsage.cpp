@@ -403,11 +403,10 @@ AST_MATCHER(CXXConstructExpr, isSafeSpanTwoParamConstruct) {
   QualType Arg0Ty = Arg0->IgnoreImplicit()->getType();
 
   if (Arg0Ty->isConstantArrayType()) {
-    const APSInt ConstArrSize =
-        APSInt(cast<ConstantArrayType>(Arg0Ty)->getSize());
+    const APInt &ConstArrSize = cast<ConstantArrayType>(Arg0Ty)->getSize();
 
     // Check form 4:
-    return Arg1CV && APSInt::compareValues(ConstArrSize, *Arg1CV) == 0;
+    return Arg1CV && APSInt::compareValues(APSInt(ConstArrSize), *Arg1CV) == 0;
   }
   return false;
 }
@@ -430,13 +429,14 @@ AST_MATCHER(ArraySubscriptExpr, isSafeArraySubscript) {
       BaseDRE->getDecl()->getType());
   if (!CATy)
     return false;
+  const APInt ArrSize = CATy->getSize();
 
   if (const auto *IdxLit = dyn_cast<IntegerLiteral>(Node.getIdx())) {
     const APInt ArrIdx = IdxLit->getValue();
     // FIXME: ArrIdx.isNegative() we could immediately emit an error as that's a
     // bug
     if (ArrIdx.isNonNegative() &&
-        ArrIdx.getLimitedValue() < CATy->getLimitedSize())
+        ArrIdx.getLimitedValue() < ArrSize.getLimitedValue())
       return true;
   }
 
@@ -1114,7 +1114,7 @@ public:
   virtual DeclUseList getClaimedVarUseSites() const override {
     const auto *ArraySubst = cast<ArraySubscriptExpr>(Node->getSubExpr());
     const auto *DRE =
-        cast<DeclRefExpr>(ArraySubst->getBase()->IgnoreParenImpCasts());
+        cast<DeclRefExpr>(ArraySubst->getBase()->IgnoreImpCasts());
     return {DRE};
   }
 };

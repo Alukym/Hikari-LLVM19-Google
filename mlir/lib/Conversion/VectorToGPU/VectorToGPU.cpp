@@ -202,7 +202,9 @@ template <typename ExtOpTy>
 static bool integerExtendSupportsMMAMatrixType(ExtOpTy extOp) {
   if (!isa<vector::TransferReadOp>(extOp.getOperand().getDefiningOp()))
     return false;
-  return llvm::all_of(extOp->getUsers(), llvm::IsaPred<vector::ContractionOp>);
+  return llvm::all_of(extOp->getUsers(), [](Operation *user) {
+    return isa<vector::ContractionOp>(user);
+  });
 }
 
 static bool fpExtendSupportsMMAMatrixType(arith::ExtFOp extOp) { return true; }
@@ -343,13 +345,15 @@ getSliceContract(Operation *op,
 static SetVector<Operation *> getOpToConvert(mlir::Operation *op,
                                              bool useNvGpu) {
   auto hasVectorDest = [](Operation *op) {
-    return llvm::any_of(op->getResultTypes(), llvm::IsaPred<VectorType>);
+    return llvm::any_of(op->getResultTypes(),
+                        [](Type t) { return isa<VectorType>(t); });
   };
   BackwardSliceOptions backwardSliceOptions;
   backwardSliceOptions.filter = hasVectorDest;
 
   auto hasVectorSrc = [](Operation *op) {
-    return llvm::any_of(op->getOperandTypes(), llvm::IsaPred<VectorType>);
+    return llvm::any_of(op->getOperandTypes(),
+                        [](Type t) { return isa<VectorType>(t); });
   };
   ForwardSliceOptions forwardSliceOptions;
   forwardSliceOptions.filter = hasVectorSrc;
@@ -1204,10 +1208,10 @@ convertElementwiseOp(RewriterBase &rewriter, Operation *op,
       return rewriter.notifyMatchFailure(op, "no mapping");
     matrixOperands.push_back(it->second);
   }
-  auto resultType = cast<gpu::MMAMatrixType>(matrixOperands[0].getType());
+  auto resultType = matrixOperands[0].getType().cast<gpu::MMAMatrixType>();
   if (opType == gpu::MMAElementwiseOp::EXTF) {
     // The floating point extension case has a different result type.
-    auto vectorType = cast<VectorType>(op->getResultTypes()[0]);
+    auto vectorType = op->getResultTypes()[0].cast<VectorType>();
     resultType = gpu::MMAMatrixType::get(resultType.getShape(),
                                          vectorType.getElementType(),
                                          resultType.getOperand());

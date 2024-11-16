@@ -25,7 +25,7 @@ namespace clangd {
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &Stream,
                               const InlayHint &Hint) {
-  return Stream << Hint.joinLabels() << "@" << Hint.range;
+  return Stream << Hint.label << "@" << Hint.range;
 }
 
 namespace {
@@ -57,11 +57,10 @@ struct ExpectedHint {
 
 MATCHER_P2(HintMatcher, Expected, Code, llvm::to_string(Expected)) {
   llvm::StringRef ExpectedView(Expected.Label);
-  std::string ResultLabel = arg.joinLabels();
-  if (ResultLabel != ExpectedView.trim(" ") ||
+  if (arg.label != ExpectedView.trim(" ") ||
       arg.paddingLeft != ExpectedView.starts_with(" ") ||
       arg.paddingRight != ExpectedView.ends_with(" ")) {
-    *result_listener << "label is '" << ResultLabel << "'";
+    *result_listener << "label is '" << arg.label << "'";
     return false;
   }
   if (arg.range != Code.range(Expected.RangeName)) {
@@ -73,7 +72,7 @@ MATCHER_P2(HintMatcher, Expected, Code, llvm::to_string(Expected)) {
   return true;
 }
 
-MATCHER_P(labelIs, Label, "") { return arg.joinLabels() == Label; }
+MATCHER_P(labelIs, Label, "") { return arg.label == Label; }
 
 Config noHintsConfig() {
   Config C;

@@ -767,21 +767,19 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
     // Checking for NaN before canonicalization provides better fidelity when
     // mapping other operations onto fmed3 since the order of operands is
     // unchanged.
-    Value *V = nullptr;
+    CallInst *NewCall = nullptr;
     if (match(Src0, PatternMatch::m_NaN()) || isa<UndefValue>(Src0)) {
-      V = IC.Builder.CreateMinNum(Src1, Src2);
+      NewCall = IC.Builder.CreateMinNum(Src1, Src2);
     } else if (match(Src1, PatternMatch::m_NaN()) || isa<UndefValue>(Src1)) {
-      V = IC.Builder.CreateMinNum(Src0, Src2);
+      NewCall = IC.Builder.CreateMinNum(Src0, Src2);
     } else if (match(Src2, PatternMatch::m_NaN()) || isa<UndefValue>(Src2)) {
-      V = IC.Builder.CreateMaxNum(Src0, Src1);
+      NewCall = IC.Builder.CreateMaxNum(Src0, Src1);
     }
 
-    if (V) {
-      if (auto *CI = dyn_cast<CallInst>(V)) {
-        CI->copyFastMathFlags(&II);
-        CI->takeName(&II);
-      }
-      return IC.replaceInstUsesWith(II, V);
+    if (NewCall) {
+      NewCall->copyFastMathFlags(&II);
+      NewCall->takeName(&II);
+      return IC.replaceInstUsesWith(II, NewCall);
     }
 
     bool Swap = false;
@@ -854,9 +852,8 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
 
     if (auto *CSrc0 = dyn_cast<Constant>(Src0)) {
       if (auto *CSrc1 = dyn_cast<Constant>(Src1)) {
-        Constant *CCmp = ConstantFoldCompareInstOperands(
-            (ICmpInst::Predicate)CCVal, CSrc0, CSrc1, DL);
-        if (CCmp && CCmp->isNullValue()) {
+        Constant *CCmp = ConstantExpr::getCompare(CCVal, CSrc0, CSrc1);
+        if (CCmp->isNullValue()) {
           return IC.replaceInstUsesWith(
               II, IC.Builder.CreateSExt(CCmp, II.getType()));
         }

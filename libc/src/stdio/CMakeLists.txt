@@ -236,16 +236,6 @@ add_entrypoint_object(
     libc.src.stdio.printf_core.vfprintf_internal
 )
 
-add_stdio_entrypoint_object(
-  fileno
-  SRCS
-    fileno.cpp
-  HDRS
-    fileno.h
-  DEPENDS
-    libc.src.stdio.fileno
-)
-
 add_subdirectory(printf_core)
 add_subdirectory(scanf_core)
 
@@ -256,13 +246,6 @@ add_entrypoint_object(
     .${LIBC_TARGET_OS}.remove
 )
 
-add_entrypoint_object(
-  rename
-  ALIAS
-  DEPENDS
-    .${LIBC_TARGET_OS}.rename
-)
-
 # These entrypoints have multiple potential implementations.
 add_stdio_entrypoint_object(feof)
 add_stdio_entrypoint_object(feof_unlocked)
@@ -270,8 +253,6 @@ add_stdio_entrypoint_object(ferror)
 add_stdio_entrypoint_object(ferror_unlocked)
 add_stdio_entrypoint_object(fseek)
 add_stdio_entrypoint_object(ftell)
-add_stdio_entrypoint_object(fseeko)
-add_stdio_entrypoint_object(ftello)
 add_stdio_entrypoint_object(fflush)
 add_stdio_entrypoint_object(clearerr)
 add_stdio_entrypoint_object(clearerr_unlocked)

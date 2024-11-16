@@ -15,11 +15,12 @@
 #include <__config>
 #include <__fwd/array.h>
 #include <__fwd/pair.h>
+#include <__fwd/subrange.h>
 #include <__fwd/tuple.h>
+#include <__tuple/pair_like.h>
 #include <__tuple/sfinae_helpers.h>
 #include <__tuple/tuple_element.h>
 #include <__tuple/tuple_indices.h>
-#include <__tuple/tuple_like_no_subrange.h>
 #include <__tuple/tuple_size.h>
 #include <__type_traits/common_reference.h>
 #include <__type_traits/common_type.h>
@@ -29,9 +30,16 @@
 #include <__type_traits/is_assignable.h>
 #include <__type_traits/is_constructible.h>
 #include <__type_traits/is_convertible.h>
+#include <__type_traits/is_copy_assignable.h>
+#include <__type_traits/is_default_constructible.h>
 #include <__type_traits/is_implicitly_default_constructible.h>
+#include <__type_traits/is_move_assignable.h>
 #include <__type_traits/is_nothrow_assignable.h>
 #include <__type_traits/is_nothrow_constructible.h>
+#include <__type_traits/is_nothrow_copy_assignable.h>
+#include <__type_traits/is_nothrow_copy_constructible.h>
+#include <__type_traits/is_nothrow_default_constructible.h>
+#include <__type_traits/is_nothrow_move_assignable.h>
 #include <__type_traits/is_same.h>
 #include <__type_traits/is_swappable.h>
 #include <__type_traits/nat.h>
@@ -58,6 +66,14 @@ struct __non_trivially_copyable_base {
   _LIBCPP_CONSTEXPR_SINCE_CXX14 _LIBCPP_HIDE_FROM_ABI
   __non_trivially_copyable_base(__non_trivially_copyable_base const&) _NOEXCEPT {}
 };
+
+#if _LIBCPP_STD_VER >= 23
+template <class _Tp>
+struct __is_specialization_of_subrange : false_type {};
+
+template <class _Iter, class _Sent, ranges::subrange_kind _Kind>
+struct __is_specialization_of_subrange<ranges::subrange<_Iter, _Sent, _Kind>> : true_type {};
+#endif
 
 template <class _T1, class _T2>
 struct _LIBCPP_TEMPLATE_VIS pair
@@ -192,19 +208,19 @@ struct _LIBCPP_TEMPLATE_VIS pair
 #  endif
 
 #  if _LIBCPP_STD_VER >= 23
-  // TODO: Remove this workaround in LLVM 20. The bug got fixed in Clang 18.
   // This is a workaround for http://llvm.org/PR60710. We should be able to remove it once Clang is fixed.
   template <class _PairLike>
   _LIBCPP_HIDE_FROM_ABI static constexpr bool __pair_like_explicit_wknd() {
-    if constexpr (__pair_like_no_subrange<_PairLike>) {
+    if constexpr (__pair_like<_PairLike>) {
       return !is_convertible_v<decltype(std::get<0>(std::declval<_PairLike&&>())), first_type> ||
              !is_convertible_v<decltype(std::get<1>(std::declval<_PairLike&&>())), second_type>;
     }
     return false;
   }
 
-  template <__pair_like_no_subrange _PairLike>
-    requires(is_constructible_v<first_type, decltype(std::get<0>(std::declval<_PairLike &&>()))> &&
+  template <__pair_like _PairLike>
+    requires(!__is_specialization_of_subrange<remove_cvref_t<_PairLike>>::value &&
+             is_constructible_v<first_type, decltype(std::get<0>(std::declval<_PairLike &&>()))> &&
              is_constructible_v<second_type, decltype(std::get<1>(std::declval<_PairLike &&>()))>)
   _LIBCPP_HIDE_FROM_ABI constexpr explicit(__pair_like_explicit_wknd<_PairLike>()) pair(_PairLike&& __p)
       : first(std::get<0>(std::forward<_PairLike>(__p))), second(std::get<1>(std::forward<_PairLike>(__p))) {}
@@ -297,8 +313,8 @@ struct _LIBCPP_TEMPLATE_VIS pair
     return *this;
   }
 
-  template <__pair_like_no_subrange _PairLike>
-    requires(__different_from<_PairLike, pair> &&
+  template <__pair_like _PairLike>
+    requires(__different_from<_PairLike, pair> && !__is_specialization_of_subrange<remove_cvref_t<_PairLike>>::value &&
              is_assignable_v<first_type&, decltype(std::get<0>(std::declval<_PairLike>()))> &&
              is_assignable_v<second_type&, decltype(std::get<1>(std::declval<_PairLike>()))>)
   _LIBCPP_HIDE_FROM_ABI constexpr pair& operator=(_PairLike&& __p) {
@@ -307,8 +323,8 @@ struct _LIBCPP_TEMPLATE_VIS pair
     return *this;
   }
 
-  template <__pair_like_no_subrange _PairLike>
-    requires(__different_from<_PairLike, pair> &&
+  template <__pair_like _PairLike>
+    requires(__different_from<_PairLike, pair> && !__is_specialization_of_subrange<remove_cvref_t<_PairLike>>::value &&
              is_assignable_v<first_type const&, decltype(std::get<0>(std::declval<_PairLike>()))> &&
              is_assignable_v<second_type const&, decltype(std::get<1>(std::declval<_PairLike>()))>)
   _LIBCPP_HIDE_FROM_ABI constexpr pair const& operator=(_PairLike&& __p) const {
@@ -431,9 +447,7 @@ private:
        tuple<_Args1...>& __first_args,
        tuple<_Args2...>& __second_args,
        __tuple_indices<_I1...>,
-       __tuple_indices<_I2...>)
-      : first(std::forward<_Args1>(std::get<_I1>(__first_args))...),
-        second(std::forward<_Args2>(std::get<_I2>(__second_args))...) {}
+       __tuple_indices<_I2...>);
 #endif
 };
 

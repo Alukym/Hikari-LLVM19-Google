@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "bolt/Passes/Hugify.h"
+#include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "bolt-hugify"
 

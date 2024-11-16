@@ -588,7 +588,7 @@ void BTFDebug::processDeclAnnotations(DINodeArray Annotations,
   for (const Metadata *Annotation : Annotations->operands()) {
     const MDNode *MD = cast<MDNode>(Annotation);
     const MDString *Name = cast<MDString>(MD->getOperand(0));
-    if (Name->getString() != "btf_decl_tag")
+    if (!Name->getString().equals("btf_decl_tag"))
       continue;
 
     const MDString *Value = cast<MDString>(MD->getOperand(1));
@@ -627,7 +627,7 @@ int BTFDebug::genBTFTypeTags(const DIDerivedType *DTy, int BaseTypeId) {
     for (const Metadata *Annotations : Annots->operands()) {
       const MDNode *MD = cast<MDNode>(Annotations);
       const MDString *Name = cast<MDString>(MD->getOperand(0));
-      if (Name->getString() != "btf_type_tag")
+      if (!Name->getString().equals("btf_type_tag"))
         continue;
       MDStrs.push_back(cast<MDString>(MD->getOperand(1)));
     }
@@ -973,7 +973,8 @@ void BTFDebug::visitMapDefType(const DIType *Ty, uint32_t &TypeId) {
 }
 
 /// Read file contents from the actual file or from the source
-std::string BTFDebug::populateFileContent(const DIFile *File) {
+std::string BTFDebug::populateFileContent(const DISubprogram *SP) {
+  auto File = SP->getFile();
   std::string FileName;
 
   if (!File->getFilename().starts_with("/") && File->getDirectory().size())
@@ -1004,9 +1005,9 @@ std::string BTFDebug::populateFileContent(const DIFile *File) {
   return FileName;
 }
 
-void BTFDebug::constructLineInfo(MCSymbol *Label, const DIFile *File,
+void BTFDebug::constructLineInfo(const DISubprogram *SP, MCSymbol *Label,
                                  uint32_t Line, uint32_t Column) {
-  std::string FileName = populateFileContent(File);
+  std::string FileName = populateFileContent(SP);
   BTFLineInfo LineInfo;
 
   LineInfo.Label = Label;
@@ -1365,10 +1366,10 @@ void BTFDebug::beginInstruction(const MachineInstr *MI) {
   if (!CurMI) // no debug info
     return;
 
-  // Skip this instruction if no DebugLoc, the DebugLoc
-  // is the same as the previous instruction or Line is 0.
+  // Skip this instruction if no DebugLoc or the DebugLoc
+  // is the same as the previous instruction.
   const DebugLoc &DL = MI->getDebugLoc();
-  if (!DL || PrevInstLoc == DL || DL.getLine() == 0) {
+  if (!DL || PrevInstLoc == DL) {
     // This instruction will be skipped, no LineInfo has
     // been generated, construct one based on function signature.
     if (LineInfoGenerated == false) {
@@ -1376,7 +1377,7 @@ void BTFDebug::beginInstruction(const MachineInstr *MI) {
       if (!S)
         return;
       MCSymbol *FuncLabel = Asm->getFunctionBegin();
-      constructLineInfo(FuncLabel, S->getFile(), S->getLine(), 0);
+      constructLineInfo(S, FuncLabel, S->getLine(), 0);
       LineInfoGenerated = true;
     }
 
@@ -1388,7 +1389,8 @@ void BTFDebug::beginInstruction(const MachineInstr *MI) {
   OS.emitLabel(LineSym);
 
   // Construct the lineinfo.
-  constructLineInfo(LineSym, DL->getFile(), DL.getLine(), DL.getCol());
+  auto SP = DL->getScope()->getSubprogram();
+  constructLineInfo(SP, LineSym, DL.getLine(), DL.getCol());
 
   LineInfoGenerated = true;
   PrevInstLoc = DL;

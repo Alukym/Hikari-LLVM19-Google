@@ -75,7 +75,7 @@ static void clearAssumptionsOfUsers(Instruction *I, DemandedBits &DB) {
     Instruction *J = WorkList.pop_back_val();
 
     // NSW, NUW, and exact are based on operands that might have changed.
-    J->dropPoisonGeneratingAnnotations();
+    J->dropPoisonGeneratingFlagsAndMetadata();
 
     // We do not have to worry about llvm.assume, because it demands its
     // operand, so trivializing can't change it.

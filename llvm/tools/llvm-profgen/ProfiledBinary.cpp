@@ -14,7 +14,6 @@
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/MC/TargetRegistry.h"
-#include "llvm/Object/COFF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
@@ -212,11 +211,10 @@ void ProfiledBinary::load() {
   OwningBinary<Binary> OBinary = unwrapOrError(createBinary(Path), Path);
   Binary &ExeBinary = *OBinary.getBinary();
 
-  IsCOFF = isa<COFFObjectFile>(&ExeBinary);
-  if (!isa<ELFObjectFileBase>(&ExeBinary) && !IsCOFF)
-    exitWithError("not a valid ELF/COFF image", Path);
+  auto *Obj = dyn_cast<ELFObjectFileBase>(&ExeBinary);
+  if (!Obj)
+    exitWithError("not a valid Elf image", Path);
 
-  auto *Obj = cast<ObjectFile>(&ExeBinary);
   TheTriple = Obj->makeTriple();
 
   LLVM_DEBUG(dbgs() << "Loading " << Path << "\n");
@@ -238,14 +236,13 @@ void ProfiledBinary::load() {
   DisassembleFunctionSet.insert(DisassembleFunctions.begin(),
                                 DisassembleFunctions.end());
 
-  if (auto *ELFObj = dyn_cast<ELFObjectFileBase>(Obj)) {
-    checkPseudoProbe(ELFObj);
-    if (UsePseudoProbes)
-      populateElfSymbolAddressList(ELFObj);
+  checkPseudoProbe(Obj);
 
-    if (ShowDisassemblyOnly)
-      decodePseudoProbe(ELFObj);
-  }
+  if (UsePseudoProbes)
+    populateElfSymbolAddressList(Obj);
+
+  if (ShowDisassemblyOnly)
+    decodePseudoProbe(Obj);
 
   // Disassemble the text sections.
   disassemble(Obj);
@@ -338,35 +335,18 @@ void ProfiledBinary::setPreferredTextSegmentAddresses(const ELFFile<ELFT> &Obj,
     exitWithError("no executable segment found", FileName);
 }
 
-void ProfiledBinary::setPreferredTextSegmentAddresses(const COFFObjectFile *Obj,
-                                                      StringRef FileName) {
-  uint64_t ImageBase = Obj->getImageBase();
-  if (!ImageBase)
-    exitWithError("Not a COFF image", FileName);
-
-  PreferredTextSegmentAddresses.push_back(ImageBase);
-  FirstLoadableAddress = ImageBase;
-
-  for (SectionRef Section : Obj->sections()) {
-    const coff_section *Sec = Obj->getCOFFSection(Section);
-    if (Sec->Characteristics & COFF::IMAGE_SCN_CNT_CODE)
-      TextSegmentOffsets.push_back(Sec->VirtualAddress);
-  }
-}
-
-void ProfiledBinary::setPreferredTextSegmentAddresses(const ObjectFile *Obj) {
+void ProfiledBinary::setPreferredTextSegmentAddresses(
+    const ELFObjectFileBase *Obj) {
   if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Obj))
     setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
   else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Obj))
     setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
   else if (const auto *ELFObj = dyn_cast<ELF64LEObjectFile>(Obj))
     setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
-  else if (const auto *ELFObj = dyn_cast<ELF64BEObjectFile>(Obj))
+  else if (const auto *ELFObj = cast<ELF64BEObjectFile>(Obj))
     setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
-  else if (const auto *COFFObj = dyn_cast<COFFObjectFile>(Obj))
-    setPreferredTextSegmentAddresses(COFFObj, Obj->getFileName());
   else
-    llvm_unreachable("invalid object format");
+    llvm_unreachable("invalid ELF object format");
 }
 
 void ProfiledBinary::checkPseudoProbe(const ELFObjectFileBase *Obj) {
@@ -462,7 +442,7 @@ void ProfiledBinary::decodePseudoProbe(const ELFObjectFileBase *Obj) {
 void ProfiledBinary::decodePseudoProbe() {
   OwningBinary<Binary> OBinary = unwrapOrError(createBinary(Path), Path);
   Binary &ExeBinary = *OBinary.getBinary();
-  auto *Obj = cast<ELFObjectFileBase>(&ExeBinary);
+  auto *Obj = dyn_cast<ELFObjectFileBase>(&ExeBinary);
   decodePseudoProbe(Obj);
 }
 
@@ -613,7 +593,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
   return true;
 }
 
-void ProfiledBinary::setUpDisassembler(const ObjectFile *Obj) {
+void ProfiledBinary::setUpDisassembler(const ELFObjectFileBase *Obj) {
   const Target *TheTarget = getTarget(Obj);
   std::string TripleName = TheTriple.getTriple();
   StringRef FileName = Obj->getFileName();
@@ -655,7 +635,7 @@ void ProfiledBinary::setUpDisassembler(const ObjectFile *Obj) {
   IPrinter->setPrintBranchImmAsAddress(true);
 }
 
-void ProfiledBinary::disassemble(const ObjectFile *Obj) {
+void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
   // Set up disassembler and related components.
   setUpDisassembler(Obj);
 
@@ -707,7 +687,7 @@ void ProfiledBinary::disassemble(const ObjectFile *Obj) {
              << "]:\n\n";
     }
 
-    if (isa<ELFObjectFileBase>(Obj) && SectionName == ".plt")
+    if (SectionName == ".plt")
       continue;
 
     // Get the section data.
@@ -742,7 +722,8 @@ void ProfiledBinary::disassemble(const ObjectFile *Obj) {
 }
 
 void ProfiledBinary::checkUseFSDiscriminator(
-    const ObjectFile *Obj, std::map<SectionRef, SectionSymbolsTy> &AllSymbols) {
+    const ELFObjectFileBase *Obj,
+    std::map<SectionRef, SectionSymbolsTy> &AllSymbols) {
   const char *FSDiscriminatorVar = "__llvm_fs_discriminator__";
   for (section_iterator SI = Obj->section_begin(), SE = Obj->section_end();
        SI != SE; ++SI) {

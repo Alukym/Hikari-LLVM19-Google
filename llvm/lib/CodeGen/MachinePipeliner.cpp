@@ -919,8 +919,7 @@ void SwingSchedulerDAG::updatePhiDependences() {
           if (!MI->isPHI()) {
             SDep Dep(SU, SDep::Data, Reg);
             Dep.setLatency(0);
-            ST.adjustSchedDependency(SU, 0, &I, MO.getOperandNo(), Dep,
-                                     &SchedModel);
+            ST.adjustSchedDependency(SU, 0, &I, MO.getOperandNo(), Dep);
             I.addPred(Dep);
           } else {
             HasPhiUse = Reg;
@@ -1248,7 +1247,7 @@ private:
     for (auto &MI : *OrigMBB) {
       if (MI.isDebugInstr())
         continue;
-      for (auto &Use : ROMap[&MI].Uses) {
+      for (auto Use : ROMap[&MI].Uses) {
         auto Reg = Use.RegUnit;
         // Ignore the variable that appears only on one side of phi instruction
         // because it's used only at the first iteration.
@@ -1269,7 +1268,7 @@ private:
   // Calculate the upper limit of each pressure set
   void computePressureSetLimit(const RegisterClassInfo &RCI) {
     for (unsigned PSet = 0; PSet < PSetNum; PSet++)
-      PressureSetLimit[PSet] = TRI->getRegPressureSetLimit(MF, PSet);
+      PressureSetLimit[PSet] = RCI.getRegPressureSetLimit(PSet);
 
     // We assume fixed registers, such as stack pointer, are already in use.
     // Therefore subtracting the weight of the fixed registers from the limit of
@@ -1346,7 +1345,7 @@ private:
 
     DenseMap<Register, MachineInstr *> LastUseMI;
     for (MachineInstr *MI : llvm::reverse(OrderedInsts)) {
-      for (auto &Use : ROMap.find(MI)->getSecond().Uses) {
+      for (auto Use : ROMap.find(MI)->getSecond().Uses) {
         auto Reg = Use.RegUnit;
         if (!TargetRegs.contains(Reg))
           continue;
@@ -2733,20 +2732,19 @@ bool SwingSchedulerDAG::isLoopCarriedDep(SUnit *Source, const SDep &Dep,
   if (!LoopDefS || !TII->getIncrementValue(*LoopDefS, D))
     return true;
 
-  LocationSize AccessSizeS = (*SI->memoperands_begin())->getSize();
-  LocationSize AccessSizeD = (*DI->memoperands_begin())->getSize();
+  uint64_t AccessSizeS = (*SI->memoperands_begin())->getSize();
+  uint64_t AccessSizeD = (*DI->memoperands_begin())->getSize();
 
   // This is the main test, which checks the offset values and the loop
   // increment value to determine if the accesses may be loop carried.
-  if (!AccessSizeS.hasValue() || !AccessSizeD.hasValue())
+  if (AccessSizeS == MemoryLocation::UnknownSize ||
+      AccessSizeD == MemoryLocation::UnknownSize)
     return true;
 
-  if (DeltaS != DeltaD || DeltaS < AccessSizeS.getValue() ||
-      DeltaD < AccessSizeD.getValue())
+  if (DeltaS != DeltaD || DeltaS < AccessSizeS || DeltaD < AccessSizeD)
     return true;
 
-  return (OffsetS + (int64_t)AccessSizeS.getValue() <
-          OffsetD + (int64_t)AccessSizeD.getValue());
+  return (OffsetS + (int64_t)AccessSizeS < OffsetD + (int64_t)AccessSizeD);
 }
 
 void SwingSchedulerDAG::postProcessDAG() {

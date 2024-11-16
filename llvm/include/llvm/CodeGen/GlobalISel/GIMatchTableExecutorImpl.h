@@ -100,7 +100,10 @@ bool GIMatchTableExecutor::executeMatchTable(
   };
 
   const auto readULEB = [&]() {
-    return fastDecodeULEB128(MatchTable, CurrentIdx);
+    unsigned N = 0;
+    uint64_t Val = decodeULEB128(MatchTable + CurrentIdx, &N);
+    CurrentIdx += N;
+    return Val;
   };
 
   // Convenience function to return a signed value. This avoids
@@ -126,16 +129,6 @@ bool GIMatchTableExecutor::executeMatchTable(
     auto V = readBytesAs<uint64_t>(MatchTable + CurrentIdx);
     CurrentIdx += 8;
     return V;
-  };
-
-  const auto eraseImpl = [&](MachineInstr *MI) {
-    // If we're erasing the insertion point, ensure we don't leave a dangling
-    // pointer in the builder.
-    if (Builder.getInsertPt() == MI)
-      Builder.setInsertPt(*MI->getParent(), ++MI->getIterator());
-    if (Observer)
-      Observer->erasingInstr(*MI);
-    MI->eraseFromParent();
   };
 
   while (true) {
@@ -473,7 +466,7 @@ bool GIMatchTableExecutor::executeMatchTable(
     }
     case GIM_CheckAtomicOrdering: {
       uint64_t InsnID = readULEB();
-      auto Ordering = (AtomicOrdering)MatchTable[CurrentIdx++];
+      auto Ordering = (AtomicOrdering)readULEB();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
                       dbgs() << CurrentIdx << ": GIM_CheckAtomicOrdering(MIs["
                              << InsnID << "], " << (uint64_t)Ordering << ")\n");
@@ -490,7 +483,7 @@ bool GIMatchTableExecutor::executeMatchTable(
     }
     case GIM_CheckAtomicOrderingOrStrongerThan: {
       uint64_t InsnID = readULEB();
-      auto Ordering = (AtomicOrdering)MatchTable[CurrentIdx++];
+      auto Ordering = (AtomicOrdering)readULEB();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
                       dbgs() << CurrentIdx
                              << ": GIM_CheckAtomicOrderingOrStrongerThan(MIs["
@@ -508,7 +501,7 @@ bool GIMatchTableExecutor::executeMatchTable(
     }
     case GIM_CheckAtomicOrderingWeakerThan: {
       uint64_t InsnID = readULEB();
-      auto Ordering = (AtomicOrdering)MatchTable[CurrentIdx++];
+      auto Ordering = (AtomicOrdering)readULEB();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
                       dbgs() << CurrentIdx
                              << ": GIM_CheckAtomicOrderingWeakerThan(MIs["
@@ -528,7 +521,7 @@ bool GIMatchTableExecutor::executeMatchTable(
       uint64_t InsnID = readULEB();
       uint64_t MMOIdx = readULEB();
       // This accepts a list of possible address spaces.
-      const uint64_t NumAddrSpace = MatchTable[CurrentIdx++];
+      const uint64_t NumAddrSpace = readULEB();
 
       if (State.MIs[InsnID]->getNumMemOperands() <= MMOIdx) {
         if (handleReject() == RejectAndGiveUp)
@@ -565,7 +558,7 @@ bool GIMatchTableExecutor::executeMatchTable(
     case GIM_CheckMemoryAlignment: {
       uint64_t InsnID = readULEB();
       uint64_t MMOIdx = readULEB();
-      uint64_t MinAlign = MatchTable[CurrentIdx++];
+      uint64_t MinAlign = readULEB();
 
       assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
 
@@ -654,23 +647,22 @@ bool GIMatchTableExecutor::executeMatchTable(
 
       unsigned Size = MRI.getType(MO.getReg()).getSizeInBits();
       if (MatcherOpcode == GIM_CheckMemorySizeEqualToLLT &&
-          MMO->getSizeInBits().getValue() != Size) {
+          MMO->getSizeInBits() != Size) {
         if (handleReject() == RejectAndGiveUp)
           return false;
       } else if (MatcherOpcode == GIM_CheckMemorySizeLessThanLLT &&
-                 MMO->getSizeInBits().getValue() >= Size) {
+                 MMO->getSizeInBits() >= Size) {
         if (handleReject() == RejectAndGiveUp)
           return false;
       } else if (MatcherOpcode == GIM_CheckMemorySizeGreaterThanLLT &&
-                 MMO->getSizeInBits().getValue() <= Size)
+                 MMO->getSizeInBits() <= Size)
         if (handleReject() == RejectAndGiveUp)
           return false;
 
       break;
     }
-    case GIM_RootCheckType:
     case GIM_CheckType: {
-      uint64_t InsnID = (MatcherOpcode == GIM_RootCheckType) ? 0 : readULEB();
+      uint64_t InsnID = readULEB();
       uint64_t OpIdx = readULEB();
       int TypeID = readS8();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
@@ -749,11 +741,8 @@ bool GIMatchTableExecutor::executeMatchTable(
       State.RecordedTypes[TypeIdx] = MRI.getType(Op.getReg());
       break;
     }
-
-    case GIM_RootCheckRegBankForClass:
     case GIM_CheckRegBankForClass: {
-      uint64_t InsnID =
-          (MatcherOpcode == GIM_RootCheckRegBankForClass) ? 0 : readULEB();
+      uint64_t InsnID = readULEB();
       uint64_t OpIdx = readULEB();
       uint16_t RCEnum = readU16();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
@@ -909,16 +898,14 @@ bool GIMatchTableExecutor::executeMatchTable(
       break;
     }
     case GIM_CheckIsSafeToFold: {
-      uint64_t NumInsn = MatchTable[CurrentIdx++];
+      uint64_t InsnID = readULEB();
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
-                      dbgs() << CurrentIdx << ": GIM_CheckIsSafeToFold(N = "
-                             << NumInsn << ")\n");
-      MachineInstr &Root = *State.MIs[0];
-      for (unsigned K = 1, E = NumInsn + 1; K < E; ++K) {
-        if (!isObviouslySafeToFold(*State.MIs[K], Root)) {
-          if (handleReject() == RejectAndGiveUp)
-            return false;
-        }
+                      dbgs() << CurrentIdx << ": GIM_CheckIsSafeToFold(MIs["
+                             << InsnID << "])\n");
+      assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
+      if (!isObviouslySafeToFold(*State.MIs[InsnID], *State.MIs[0])) {
+        if (handleReject() == RejectAndGiveUp)
+          return false;
       }
       break;
     }
@@ -1024,9 +1011,8 @@ bool GIMatchTableExecutor::executeMatchTable(
       break;
     }
 
-    case GIR_BuildRootMI:
     case GIR_BuildMI: {
-      uint64_t NewInsnID = (MatcherOpcode == GIR_BuildRootMI) ? 0 : readULEB();
+      uint64_t NewInsnID = readULEB();
       uint16_t Opcode = readU16();
       if (NewInsnID >= OutMIs.size())
         OutMIs.resize(NewInsnID + 1);
@@ -1048,12 +1034,9 @@ bool GIMatchTableExecutor::executeMatchTable(
       break;
     }
 
-    case GIR_RootToRootCopy:
     case GIR_Copy: {
-      uint64_t NewInsnID =
-          (MatcherOpcode == GIR_RootToRootCopy) ? 0 : readULEB();
-      uint64_t OldInsnID =
-          (MatcherOpcode == GIR_RootToRootCopy) ? 0 : readULEB();
+      uint64_t NewInsnID = readULEB();
+      uint64_t OldInsnID = readULEB();
       uint64_t OpIdx = readULEB();
       assert(OutMIs[NewInsnID] && "Attempted to add to undefined instruction");
       OutMIs[NewInsnID].add(State.MIs[OldInsnID]->getOperand(OpIdx));
@@ -1378,11 +1361,8 @@ bool GIMatchTableExecutor::executeMatchTable(
       break;
     }
 
-    case GIR_RootConstrainSelectedInstOperands:
     case GIR_ConstrainSelectedInstOperands: {
-      uint64_t InsnID = (MatcherOpcode == GIR_RootConstrainSelectedInstOperands)
-                            ? 0
-                            : readULEB();
+      uint64_t InsnID = readULEB();
       assert(OutMIs[InsnID] && "Attempted to add to undefined instruction");
       constrainSelectedInstRegOperands(*OutMIs[InsnID].getInstr(), TII, TRI,
                                        RBI);
@@ -1392,6 +1372,7 @@ bool GIMatchTableExecutor::executeMatchTable(
                              << InsnID << "])\n");
       break;
     }
+
     case GIR_MergeMemOperands: {
       uint64_t InsnID = readULEB();
       uint64_t NumInsn = MatchTable[CurrentIdx++];
@@ -1410,6 +1391,7 @@ bool GIMatchTableExecutor::executeMatchTable(
       DEBUG_WITH_TYPE(TgtExecutor::getName(), dbgs() << ")\n");
       break;
     }
+
     case GIR_EraseFromParent: {
       uint64_t InsnID = readULEB();
       MachineInstr *MI = State.MIs[InsnID];
@@ -1417,17 +1399,16 @@ bool GIMatchTableExecutor::executeMatchTable(
       DEBUG_WITH_TYPE(TgtExecutor::getName(),
                       dbgs() << CurrentIdx << ": GIR_EraseFromParent(MIs["
                              << InsnID << "])\n");
-      eraseImpl(MI);
+      // If we're erasing the insertion point, ensure we don't leave a dangling
+      // pointer in the builder.
+      if (Builder.getInsertPt() == MI)
+        Builder.setInsertPt(*MI->getParent(), ++MI->getIterator());
+      if (Observer)
+        Observer->erasingInstr(*MI);
+      MI->eraseFromParent();
       break;
     }
-    case GIR_EraseRootFromParent_Done: {
-      DEBUG_WITH_TYPE(TgtExecutor::getName(),
-                      dbgs()
-                          << CurrentIdx << ": GIR_EraseRootFromParent_Done\n");
-      eraseImpl(State.MIs[0]);
-      propagateFlags();
-      return true;
-    }
+
     case GIR_MakeTempReg: {
       uint64_t TempRegID = readULEB();
       int TypeID = readS8();

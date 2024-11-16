@@ -403,22 +403,6 @@ static Value genInsertionLoadReduce(CodegenEnv &env, OpBuilder &builder,
   return builder.create<arith::SelectOp>(loc, isFilled, valAtIndex, identity);
 }
 
-static Value genConditionalInsert(Location loc, OpBuilder &builder, Value cond,
-                                  Value sparseOut, ValueRange ivs, Value v) {
-  scf::IfOp condInsert =
-      builder.create<scf::IfOp>(loc, sparseOut.getType(), cond, true);
-  // True branch.
-  builder.setInsertionPointToStart(condInsert.thenBlock());
-  Value res = builder.create<tensor::InsertOp>(loc, v, sparseOut, ivs);
-  builder.create<scf::YieldOp>(loc, res);
-  // False branch.
-  builder.setInsertionPointToStart(condInsert.elseBlock());
-  builder.create<scf::YieldOp>(loc, sparseOut);
-  // Value assignment.
-  builder.setInsertionPointAfter(condInsert);
-  return condInsert.getResult(0);
-}
-
 /// Generates insertion code to implement dynamic tensor store.
 static void genInsertionStore(CodegenEnv &env, OpBuilder &builder, OpOperand *t,
                               Value rhs) {
@@ -439,21 +423,23 @@ static void genInsertionStore(CodegenEnv &env, OpBuilder &builder, OpOperand *t,
       //     return updated chain
       //   else
       //     return unmodified chain
-      Value out = genConditionalInsert(loc, builder, env.getValidLexInsert(),
-                                       chain, ivs, rhs);
-      env.updateInsertionChain(out);
+      scf::IfOp ifValidLexInsert = builder.create<scf::IfOp>(
+          loc, chain.getType(), env.getValidLexInsert(),
+          /*else=*/true);
+      // True branch.
+      builder.setInsertionPointToStart(ifValidLexInsert.thenBlock());
+      Value res = builder.create<tensor::InsertOp>(loc, rhs, chain, ivs);
+      builder.create<scf::YieldOp>(loc, res);
+      // False branch.
+      builder.setInsertionPointToStart(ifValidLexInsert.elseBlock());
+      builder.create<scf::YieldOp>(loc, chain);
+      // Value assignment.
+      builder.setInsertionPointAfter(ifValidLexInsert);
+      env.updateInsertionChain(ifValidLexInsert.getResult(0));
     } else {
-      Value sparseOut;
-      if (!hasAnySparseType(env.op().getInputs().getTypes())) {
-        // This is an all-dense -> sparse kernel, test rhs != 0 before
-        // insertion.
-        Value nz = genIsNonzero(builder, loc, rhs);
-        sparseOut = genConditionalInsert(loc, builder, nz, chain, ivs, rhs);
-      } else {
-        sparseOut = builder.create<tensor::InsertOp>(loc, rhs, chain, ivs);
-      }
       // Generates regular insertion chain.
-      env.updateInsertionChain(sparseOut);
+      env.updateInsertionChain(
+          builder.create<tensor::InsertOp>(loc, rhs, chain, ivs));
     }
     return;
   }
@@ -498,15 +484,9 @@ static Value genTensorLoad(CodegenEnv &env, OpBuilder &builder, ExprId exp) {
   Value val = env.exp(exp).val;
   if (val)
     return val;
-  // Get tensor operand.
-  linalg::GenericOp op = env.op();
-  Location loc = op.getLoc();
-  OpOperand *t = &op->getOpOperand(env.exp(exp).tensor);
-  // Fold binary-valued tensor into explicit value.
-  const auto stt = getSparseTensorType(t->get());
-  if (auto explVal = stt.getExplicitVal())
-    return genValFromAttr(builder, loc, explVal);
   // Load during insertion.
+  linalg::GenericOp op = env.op();
+  OpOperand *t = &op->getOpOperand(env.exp(exp).tensor);
   if (env.isSparseOutput(t)) {
     if (env.isCustomReduc())
       return genInsertionLoadReduce(env, builder, t);
@@ -515,7 +495,7 @@ static Value genTensorLoad(CodegenEnv &env, OpBuilder &builder, ExprId exp) {
   // Actual load.
   SmallVector<Value> args;
   Value ptr = genSubscript(env, builder, t, args);
-  return builder.create<memref::LoadOp>(loc, ptr, args);
+  return builder.create<memref::LoadOp>(op.getLoc(), ptr, args);
 }
 
 /// Generates a store on a dense or sparse tensor.

@@ -3377,7 +3377,7 @@ protected:
       case 'r': {
         size_t ref_count = 0;
         char in_shared_cache = 'Y';
-
+        
         ModuleSP module_sp(module->shared_from_this());
         if (!ModuleList::ModuleIsInCache(module))
           in_shared_cache = 'N';
@@ -4508,8 +4508,11 @@ protected:
 
     ModuleSpec module_spec;
     module_spec.GetUUID() = frame_module_sp->GetUUID();
-    module_spec.GetArchitecture() = frame_module_sp->GetArchitecture();
-    module_spec.GetFileSpec() = frame_module_sp->GetPlatformFileSpec();
+
+    if (FileSystem::Instance().Exists(frame_module_sp->GetPlatformFileSpec())) {
+      module_spec.GetArchitecture() = frame_module_sp->GetArchitecture();
+      module_spec.GetFileSpec() = frame_module_sp->GetPlatformFileSpec();
+    }
 
     if (!DownloadObjectAndSymbolFile(module_spec, result, flush)) {
       result.AppendError("unable to find debug symbols for the current frame");
@@ -4554,8 +4557,12 @@ protected:
 
       ModuleSpec module_spec;
       module_spec.GetUUID() = frame_module_sp->GetUUID();
-      module_spec.GetFileSpec() = frame_module_sp->GetPlatformFileSpec();
-      module_spec.GetArchitecture() = frame_module_sp->GetArchitecture();
+
+      if (FileSystem::Instance().Exists(
+              frame_module_sp->GetPlatformFileSpec())) {
+        module_spec.GetArchitecture() = frame_module_sp->GetArchitecture();
+        module_spec.GetFileSpec() = frame_module_sp->GetPlatformFileSpec();
+      }
 
       bool current_frame_flush = false;
       if (DownloadObjectAndSymbolFile(module_spec, result, current_frame_flush))

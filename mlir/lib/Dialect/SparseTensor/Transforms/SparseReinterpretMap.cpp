@@ -502,7 +502,7 @@ private:
     for (const AffineExpr l : order.getResults()) {
       unsigned loopId = llvm::cast<AffineDimExpr>(l).getPosition();
       auto itTp =
-          cast<linalg::IteratorTypeAttr>(linalgOp.getIteratorTypes()[loopId]);
+          linalgOp.getIteratorTypes()[loopId].cast<linalg::IteratorTypeAttr>();
       if (linalg::isReductionIterator(itTp.getValue()))
         break; // terminate at first reduction
       nest++;
@@ -573,12 +573,6 @@ private:
       rewriter.modifyOpInPlace(linalgOp, [&]() {
         linalgOp->setOperand(t->getOperandNumber(), dst);
       });
-
-      // Release the transposed form afterwards.
-      // TODO: CSE when used in more than one following op?
-      rewriter.setInsertionPointAfter(linalgOp);
-      rewriter.create<bufferization::DeallocTensorOp>(dst.getLoc(), dst);
-
       return success();
     }
     // Cannot be resolved with a single conversion.
@@ -764,10 +758,9 @@ struct ForeachOpDemapper
     if (numInitArgs != 0) {
       rewriter.setInsertionPointToEnd(body);
       auto yield = llvm::cast<YieldOp>(body->getTerminator());
-      if (auto stt = tryGetSparseTensorType(yield.getSingleResult());
+      if (auto stt = tryGetSparseTensorType(yield.getResult());
           stt && !stt->isIdentity()) {
-        Value y =
-            genDemap(rewriter, stt->getEncoding(), yield.getSingleResult());
+        Value y = genDemap(rewriter, stt->getEncoding(), yield.getResult());
         rewriter.create<YieldOp>(loc, y);
         rewriter.eraseOp(yield);
       }

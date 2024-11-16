@@ -310,12 +310,8 @@ public:
     // True if this node was effectively removed from the graph, in which case
     // its context id set, caller edges, and callee edges should all be empty.
     bool isRemoved() const {
-      // Note that we can have non-empty context ids with empty caller and
-      // callee edges if the graph ends up with a single node.
-      if (ContextIds.empty())
-        assert(CalleeEdges.empty() && CallerEdges.empty() &&
-               "Context ids empty but at least one of callee and caller edges "
-               "were not!");
+      assert(ContextIds.empty() ==
+             (CalleeEdges.empty() && CallerEdges.empty()));
       return ContextIds.empty();
     }
 
@@ -357,12 +353,9 @@ public:
     }
   };
 
-  /// Helpers to remove callee edges that have allocation type None (due to not
+  /// Helper to remove callee edges that have allocation type None (due to not
   /// carrying any context ids) after transformations.
   void removeNoneTypeCalleeEdges(ContextNode *Node);
-  void
-  recursivelyRemoveNoneTypeCalleeEdges(ContextNode *Node,
-                                       DenseSet<const ContextNode *> &Visited);
 
 protected:
   /// Get a list of nodes corresponding to the stack ids in the given callsite
@@ -526,30 +519,25 @@ private:
   /// Create a clone of Edge's callee and move Edge to that new callee node,
   /// performing the necessary context id and allocation type updates.
   /// If callee's caller edge iterator is supplied, it is updated when removing
-  /// the edge from that list. If ContextIdsToMove is non-empty, only that
-  /// subset of Edge's ids are moved to an edge to the new callee.
+  /// the edge from that list.
   ContextNode *
   moveEdgeToNewCalleeClone(const std::shared_ptr<ContextEdge> &Edge,
-                           EdgeIter *CallerEdgeI = nullptr,
-                           DenseSet<uint32_t> ContextIdsToMove = {});
+                           EdgeIter *CallerEdgeI = nullptr);
 
   /// Change the callee of Edge to existing callee clone NewCallee, performing
   /// the necessary context id and allocation type updates.
   /// If callee's caller edge iterator is supplied, it is updated when removing
-  /// the edge from that list. If ContextIdsToMove is non-empty, only that
-  /// subset of Edge's ids are moved to an edge to the new callee.
+  /// the edge from that list.
   void moveEdgeToExistingCalleeClone(const std::shared_ptr<ContextEdge> &Edge,
                                      ContextNode *NewCallee,
                                      EdgeIter *CallerEdgeI = nullptr,
-                                     bool NewClone = false,
-                                     DenseSet<uint32_t> ContextIdsToMove = {});
+                                     bool NewClone = false);
 
   /// Recursively perform cloning on the graph for the given Node and its
   /// callers, in order to uniquely identify the allocation behavior of an
-  /// allocation given its context. The context ids of the allocation being
-  /// processed are given in AllocContextIds.
-  void identifyClones(ContextNode *Node, DenseSet<const ContextNode *> &Visited,
-                      const DenseSet<uint32_t> &AllocContextIds);
+  /// allocation given its context.
+  void identifyClones(ContextNode *Node,
+                      DenseSet<const ContextNode *> &Visited);
 
   /// Map from each context ID to the AllocationType assigned to that context.
   std::map<uint32_t, AllocationType> ContextIdToAllocationType;
@@ -2363,8 +2351,7 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::exportToDot(
 template <typename DerivedCCG, typename FuncTy, typename CallTy>
 typename CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::ContextNode *
 CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::moveEdgeToNewCalleeClone(
-    const std::shared_ptr<ContextEdge> &Edge, EdgeIter *CallerEdgeI,
-    DenseSet<uint32_t> ContextIdsToMove) {
+    const std::shared_ptr<ContextEdge> &Edge, EdgeIter *CallerEdgeI) {
   ContextNode *Node = Edge->Callee;
   NodeOwner.push_back(
       std::make_unique<ContextNode>(Node->IsAllocation, Node->Call));
@@ -2372,8 +2359,7 @@ CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::moveEdgeToNewCalleeClone(
   Node->addClone(Clone);
   assert(NodeToCallingFunc.count(Node));
   NodeToCallingFunc[Clone] = NodeToCallingFunc[Node];
-  moveEdgeToExistingCalleeClone(Edge, Clone, CallerEdgeI, /*NewClone=*/true,
-                                ContextIdsToMove);
+  moveEdgeToExistingCalleeClone(Edge, Clone, CallerEdgeI, /*NewClone=*/true);
   return Clone;
 }
 
@@ -2381,81 +2367,23 @@ template <typename DerivedCCG, typename FuncTy, typename CallTy>
 void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::
     moveEdgeToExistingCalleeClone(const std::shared_ptr<ContextEdge> &Edge,
                                   ContextNode *NewCallee, EdgeIter *CallerEdgeI,
-                                  bool NewClone,
-                                  DenseSet<uint32_t> ContextIdsToMove) {
+                                  bool NewClone) {
   // NewCallee and Edge's current callee must be clones of the same original
   // node (Edge's current callee may be the original node too).
   assert(NewCallee->getOrigNode() == Edge->Callee->getOrigNode());
-
+  auto &EdgeContextIds = Edge->getContextIds();
   ContextNode *OldCallee = Edge->Callee;
-
-  // We might already have an edge to the new callee from earlier cloning for a
-  // different allocation. If one exists we will reuse it.
-  auto ExistingEdgeToNewCallee = NewCallee->findEdgeFromCaller(Edge->Caller);
-
-  // Callers will pass an empty ContextIdsToMove set when they want to move the
-  // edge. Copy in Edge's ids for simplicity.
-  if (ContextIdsToMove.empty())
-    ContextIdsToMove = Edge->getContextIds();
-
-  // If we are moving all of Edge's ids, then just move the whole Edge.
-  // Otherwise only move the specified subset, to a new edge if needed.
-  if (Edge->getContextIds().size() == ContextIdsToMove.size()) {
-    // Moving the whole Edge.
-    if (CallerEdgeI)
-      *CallerEdgeI = OldCallee->CallerEdges.erase(*CallerEdgeI);
-    else
-      OldCallee->eraseCallerEdge(Edge.get());
-    if (ExistingEdgeToNewCallee) {
-      // Since we already have an edge to NewCallee, simply move the ids
-      // onto it, and remove the existing Edge.
-      ExistingEdgeToNewCallee->getContextIds().insert(ContextIdsToMove.begin(),
-                                                      ContextIdsToMove.end());
-      ExistingEdgeToNewCallee->AllocTypes |= Edge->AllocTypes;
-      assert(Edge->ContextIds == ContextIdsToMove);
-      Edge->ContextIds.clear();
-      Edge->AllocTypes = (uint8_t)AllocationType::None;
-      Edge->Caller->eraseCalleeEdge(Edge.get());
-    } else {
-      // Otherwise just reconnect Edge to NewCallee.
-      Edge->Callee = NewCallee;
-      NewCallee->CallerEdges.push_back(Edge);
-      // Don't need to update Edge's context ids since we are simply
-      // reconnecting it.
-    }
-    // In either case, need to update the alloc types on New Callee.
-    NewCallee->AllocTypes |= Edge->AllocTypes;
-  } else {
-    // Only moving a subset of Edge's ids.
-    if (CallerEdgeI)
-      ++CallerEdgeI;
-    // Compute the alloc type of the subset of ids being moved.
-    auto CallerEdgeAllocType = computeAllocType(ContextIdsToMove);
-    if (ExistingEdgeToNewCallee) {
-      // Since we already have an edge to NewCallee, simply move the ids
-      // onto it.
-      ExistingEdgeToNewCallee->getContextIds().insert(ContextIdsToMove.begin(),
-                                                      ContextIdsToMove.end());
-      ExistingEdgeToNewCallee->AllocTypes |= CallerEdgeAllocType;
-    } else {
-      // Otherwise, create a new edge to NewCallee for the ids being moved.
-      auto NewEdge = std::make_shared<ContextEdge>(
-          NewCallee, Edge->Caller, CallerEdgeAllocType, ContextIdsToMove);
-      Edge->Caller->CalleeEdges.push_back(NewEdge);
-      NewCallee->CallerEdges.push_back(NewEdge);
-    }
-    // In either case, need to update the alloc types on NewCallee, and remove
-    // those ids and update the alloc type on the original Edge.
-    NewCallee->AllocTypes |= CallerEdgeAllocType;
-    set_subtract(Edge->ContextIds, ContextIdsToMove);
-    Edge->AllocTypes = computeAllocType(Edge->ContextIds);
-  }
-  // Now perform some updates that are common to all cases: the NewCallee gets
-  // the moved ids added, and we need to remove those ids from OldCallee and
-  // update its alloc type (NewCallee alloc type updates handled above).
-  NewCallee->ContextIds.insert(ContextIdsToMove.begin(),
-                               ContextIdsToMove.end());
-  set_subtract(OldCallee->ContextIds, ContextIdsToMove);
+  if (CallerEdgeI)
+    *CallerEdgeI = OldCallee->CallerEdges.erase(*CallerEdgeI);
+  else
+    OldCallee->eraseCallerEdge(Edge.get());
+  Edge->Callee = NewCallee;
+  NewCallee->CallerEdges.push_back(Edge);
+  // Don't need to update Edge's context ids since we are simply reconnecting
+  // it.
+  set_subtract(OldCallee->ContextIds, EdgeContextIds);
+  NewCallee->ContextIds.insert(EdgeContextIds.begin(), EdgeContextIds.end());
+  NewCallee->AllocTypes |= Edge->AllocTypes;
   OldCallee->AllocTypes = computeAllocType(OldCallee->ContextIds);
   // OldCallee alloc type should be None iff its context id set is now empty.
   assert((OldCallee->AllocTypes == (uint8_t)AllocationType::None) ==
@@ -2467,7 +2395,7 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::
     // The context ids moving to the new callee are the subset of this edge's
     // context ids and the context ids on the caller edge being moved.
     DenseSet<uint32_t> EdgeContextIdsToMove =
-        set_intersection(OldCalleeEdge->getContextIds(), ContextIdsToMove);
+        set_intersection(OldCalleeEdge->getContextIds(), EdgeContextIds);
     set_subtract(OldCalleeEdge->getContextIds(), EdgeContextIdsToMove);
     OldCalleeEdge->AllocTypes =
         computeAllocType(OldCalleeEdge->getContextIds());
@@ -2504,44 +2432,10 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::
 }
 
 template <typename DerivedCCG, typename FuncTy, typename CallTy>
-void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::
-    recursivelyRemoveNoneTypeCalleeEdges(
-        ContextNode *Node, DenseSet<const ContextNode *> &Visited) {
-  auto Inserted = Visited.insert(Node);
-  if (!Inserted.second)
-    return;
-
-  removeNoneTypeCalleeEdges(Node);
-
-  for (auto *Clone : Node->Clones)
-    recursivelyRemoveNoneTypeCalleeEdges(Clone, Visited);
-
-  // The recursive call may remove some of this Node's caller edges.
-  // Iterate over a copy and skip any that were removed.
-  auto CallerEdges = Node->CallerEdges;
-  for (auto &Edge : CallerEdges) {
-    // Skip any that have been removed by an earlier recursive call.
-    if (Edge->Callee == nullptr && Edge->Caller == nullptr) {
-      assert(!std::count(Node->CallerEdges.begin(), Node->CallerEdges.end(),
-                         Edge));
-      continue;
-    }
-    recursivelyRemoveNoneTypeCalleeEdges(Edge->Caller, Visited);
-  }
-}
-
-template <typename DerivedCCG, typename FuncTy, typename CallTy>
 void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones() {
   DenseSet<const ContextNode *> Visited;
-  for (auto &Entry : AllocationCallToContextNodeMap) {
-    Visited.clear();
-    identifyClones(Entry.second, Visited, Entry.second->ContextIds);
-  }
-  Visited.clear();
   for (auto &Entry : AllocationCallToContextNodeMap)
-    recursivelyRemoveNoneTypeCalleeEdges(Entry.second, Visited);
-  if (VerifyCCG)
-    check();
+    identifyClones(Entry.second, Visited);
 }
 
 // helper function to check an AllocType is cold or notcold or both.
@@ -2554,10 +2448,9 @@ bool checkColdOrNotCold(uint8_t AllocType) {
 
 template <typename DerivedCCG, typename FuncTy, typename CallTy>
 void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
-    ContextNode *Node, DenseSet<const ContextNode *> &Visited,
-    const DenseSet<uint32_t> &AllocContextIds) {
+    ContextNode *Node, DenseSet<const ContextNode *> &Visited) {
   if (VerifyNodes)
-    checkNode<DerivedCCG, FuncTy, CallTy>(Node, /*CheckEdges=*/false);
+    checkNode<DerivedCCG, FuncTy, CallTy>(Node);
   assert(!Node->CloneOf);
 
   // If Node as a null call, then either it wasn't found in the module (regular
@@ -2589,7 +2482,7 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
       }
       // Ignore any caller we previously visited via another edge.
       if (!Visited.count(Edge->Caller) && !Edge->Caller->CloneOf) {
-        identifyClones(Edge->Caller, Visited, AllocContextIds);
+        identifyClones(Edge->Caller, Visited);
       }
     }
   }
@@ -2618,16 +2511,8 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
   std::stable_sort(Node->CallerEdges.begin(), Node->CallerEdges.end(),
                    [&](const std::shared_ptr<ContextEdge> &A,
                        const std::shared_ptr<ContextEdge> &B) {
-                     // Nodes with non-empty context ids should be sorted before
-                     // those with empty context ids.
-                     if (A->ContextIds.empty())
-                       // Either B ContextIds are non-empty (in which case we
-                       // should return false because B < A), or B ContextIds
-                       // are empty, in which case they are equal, and we should
-                       // maintain the original relative ordering.
-                       return false;
-                     if (B->ContextIds.empty())
-                       return true;
+                     assert(checkColdOrNotCold(A->AllocTypes) &&
+                            checkColdOrNotCold(B->AllocTypes));
 
                      if (A->AllocTypes == B->AllocTypes)
                        // Use the first context id for each edge as a
@@ -2652,23 +2537,13 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
     if (hasSingleAllocType(Node->AllocTypes) || Node->CallerEdges.size() <= 1)
       break;
 
-    // Only need to process the ids along this edge pertaining to the given
-    // allocation.
-    auto CallerEdgeContextsForAlloc =
-        set_intersection(CallerEdge->getContextIds(), AllocContextIds);
-    if (CallerEdgeContextsForAlloc.empty()) {
-      ++EI;
-      continue;
-    }
-    auto CallerAllocTypeForAlloc = computeAllocType(CallerEdgeContextsForAlloc);
-
     // Compute the node callee edge alloc types corresponding to the context ids
     // for this caller edge.
     std::vector<uint8_t> CalleeEdgeAllocTypesForCallerEdge;
     CalleeEdgeAllocTypesForCallerEdge.reserve(Node->CalleeEdges.size());
     for (auto &CalleeEdge : Node->CalleeEdges)
       CalleeEdgeAllocTypesForCallerEdge.push_back(intersectAllocTypes(
-          CalleeEdge->getContextIds(), CallerEdgeContextsForAlloc));
+          CalleeEdge->getContextIds(), CallerEdge->getContextIds()));
 
     // Don't clone if doing so will not disambiguate any alloc types amongst
     // caller edges (including the callee edges that would be cloned).
@@ -2683,7 +2558,7 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
     // disambiguated by splitting out different context ids.
     assert(CallerEdge->AllocTypes != (uint8_t)AllocationType::None);
     assert(Node->AllocTypes != (uint8_t)AllocationType::None);
-    if (allocTypeToUse(CallerAllocTypeForAlloc) ==
+    if (allocTypeToUse(CallerEdge->AllocTypes) ==
             allocTypeToUse(Node->AllocTypes) &&
         allocTypesMatch<DerivedCCG, FuncTy, CallTy>(
             CalleeEdgeAllocTypesForCallerEdge, Node->CalleeEdges)) {
@@ -2696,7 +2571,7 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
     ContextNode *Clone = nullptr;
     for (auto *CurClone : Node->Clones) {
       if (allocTypeToUse(CurClone->AllocTypes) !=
-          allocTypeToUse(CallerAllocTypeForAlloc))
+          allocTypeToUse(CallerEdge->AllocTypes))
         continue;
 
       if (!allocTypesMatch<DerivedCCG, FuncTy, CallTy>(
@@ -2708,26 +2583,47 @@ void CallsiteContextGraph<DerivedCCG, FuncTy, CallTy>::identifyClones(
 
     // The edge iterator is adjusted when we move the CallerEdge to the clone.
     if (Clone)
-      moveEdgeToExistingCalleeClone(CallerEdge, Clone, &EI, /*NewClone=*/false,
-                                    CallerEdgeContextsForAlloc);
+      moveEdgeToExistingCalleeClone(CallerEdge, Clone, &EI);
     else
-      Clone =
-          moveEdgeToNewCalleeClone(CallerEdge, &EI, CallerEdgeContextsForAlloc);
+      Clone = moveEdgeToNewCalleeClone(CallerEdge, &EI);
 
     assert(EI == Node->CallerEdges.end() ||
            Node->AllocTypes != (uint8_t)AllocationType::None);
     // Sanity check that no alloc types on clone or its edges are None.
     assert(Clone->AllocTypes != (uint8_t)AllocationType::None);
+    assert(llvm::none_of(
+        Clone->CallerEdges, [&](const std::shared_ptr<ContextEdge> &E) {
+          return E->AllocTypes == (uint8_t)AllocationType::None;
+        }));
   }
 
+  // Cloning may have resulted in some cloned callee edges with type None,
+  // because they aren't carrying any contexts. Remove those edges.
+  for (auto *Clone : Node->Clones) {
+    removeNoneTypeCalleeEdges(Clone);
+    if (VerifyNodes)
+      checkNode<DerivedCCG, FuncTy, CallTy>(Clone);
+  }
   // We should still have some context ids on the original Node.
   assert(!Node->ContextIds.empty());
 
+  // Remove any callee edges that ended up with alloc type None after creating
+  // clones and updating callee edges.
+  removeNoneTypeCalleeEdges(Node);
+
   // Sanity check that no alloc types on node or edges are None.
   assert(Node->AllocTypes != (uint8_t)AllocationType::None);
+  assert(llvm::none_of(Node->CalleeEdges,
+                       [&](const std::shared_ptr<ContextEdge> &E) {
+                         return E->AllocTypes == (uint8_t)AllocationType::None;
+                       }));
+  assert(llvm::none_of(Node->CallerEdges,
+                       [&](const std::shared_ptr<ContextEdge> &E) {
+                         return E->AllocTypes == (uint8_t)AllocationType::None;
+                       }));
 
   if (VerifyNodes)
-    checkNode<DerivedCCG, FuncTy, CallTy>(Node, /*CheckEdges=*/false);
+    checkNode<DerivedCCG, FuncTy, CallTy>(Node);
 }
 
 void ModuleCallsiteContextGraph::updateAllocationCall(

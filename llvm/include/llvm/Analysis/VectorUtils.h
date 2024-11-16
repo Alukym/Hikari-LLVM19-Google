@@ -301,7 +301,7 @@ MDNode *intersectAccessGroups(const Instruction *Inst1,
                               const Instruction *Inst2);
 
 /// Specifically, let Kinds = [MD_tbaa, MD_alias_scope, MD_noalias, MD_fpmath,
-/// MD_nontemporal, MD_access_group, MD_mmra].
+/// MD_nontemporal, MD_access_group].
 /// For K in Kinds, we get the MDNode for K from each of the
 /// elements of VL, compute their "intersection" (i.e., the most generic
 /// metadata value that covers all of the individual values), and set I's
@@ -795,11 +795,9 @@ private:
   void collectDependences() {
     if (!areDependencesValid())
       return;
-    const auto &DepChecker = LAI->getDepChecker();
-    auto *Deps = DepChecker.getDependences();
+    auto *Deps = LAI->getDepChecker().getDependences();
     for (auto Dep : *Deps)
-      Dependences[Dep.getSource(DepChecker)].insert(
-          Dep.getDestination(DepChecker));
+      Dependences[Dep.getSource(*LAI)].insert(Dep.getDestination(*LAI));
   }
 };
 

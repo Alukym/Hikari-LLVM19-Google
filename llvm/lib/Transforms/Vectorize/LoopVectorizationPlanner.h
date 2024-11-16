@@ -68,7 +68,6 @@ class VPBuilder {
 public:
   VPBuilder() = default;
   VPBuilder(VPBasicBlock *InsertBB) { setInsertPoint(InsertBB); }
-  VPBuilder(VPRecipeBase *InsertPt) { setInsertPoint(InsertPt); }
 
   /// Clear the insertion point: created instructions will not be inserted into
   /// a block.
@@ -173,10 +172,7 @@ public:
 
   VPValue *createOr(VPValue *LHS, VPValue *RHS, DebugLoc DL = {},
                     const Twine &Name = "") {
-
-    return tryInsertInstruction(new VPInstruction(
-        Instruction::BinaryOps::Or, {LHS, RHS},
-        VPRecipeWithIRFlags::DisjointFlagsTy(false), DL, Name));
+    return createInstruction(Instruction::BinaryOps::Or, {LHS, RHS}, DL, Name);
   }
 
   VPValue *createSelect(VPValue *Cond, VPValue *TrueVal, VPValue *FalseVal,

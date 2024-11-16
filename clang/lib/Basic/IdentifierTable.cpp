@@ -541,8 +541,7 @@ unsigned Selector::getNumArgs() const {
   return SI->getNumArgs();
 }
 
-const IdentifierInfo *
-Selector::getIdentifierInfoForSlot(unsigned argIndex) const {
+IdentifierInfo *Selector::getIdentifierInfoForSlot(unsigned argIndex) const {
   if (getIdentifierInfoFlag() < MultiArg) {
     assert(argIndex == 0 && "illegal keyword index");
     return getAsIdentifierInfo();
@@ -554,7 +553,7 @@ Selector::getIdentifierInfoForSlot(unsigned argIndex) const {
 }
 
 StringRef Selector::getNameForSlot(unsigned int argIndex) const {
-  const IdentifierInfo *II = getIdentifierInfoForSlot(argIndex);
+  IdentifierInfo *II = getIdentifierInfoForSlot(argIndex);
   return II ? II->getName() : StringRef();
 }
 
@@ -575,7 +574,7 @@ std::string Selector::getAsString() const {
     return "<null selector>";
 
   if (getIdentifierInfoFlag() < MultiArg) {
-    const IdentifierInfo *II = getAsIdentifierInfo();
+    IdentifierInfo *II = getAsIdentifierInfo();
 
     if (getNumArgs() == 0) {
       assert(II && "If the number of arguments is 0 then II is guaranteed to "
@@ -609,7 +608,7 @@ static bool startsWithWord(StringRef name, StringRef word) {
 }
 
 ObjCMethodFamily Selector::getMethodFamilyImpl(Selector sel) {
-  const IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
+  IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
   if (!first) return OMF_None;
 
   StringRef name = first->getName();
@@ -656,7 +655,7 @@ ObjCMethodFamily Selector::getMethodFamilyImpl(Selector sel) {
 }
 
 ObjCInstanceTypeFamily Selector::getInstTypeMethodFamily(Selector sel) {
-  const IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
+  IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
   if (!first) return OIT_None;
 
   StringRef name = first->getName();
@@ -684,7 +683,7 @@ ObjCInstanceTypeFamily Selector::getInstTypeMethodFamily(Selector sel) {
 }
 
 ObjCStringFormatFamily Selector::getStringFormatFamilyImpl(Selector sel) {
-  const IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
+  IdentifierInfo *first = sel.getIdentifierInfoForSlot(0);
   if (!first) return SFF_None;
 
   StringRef name = first->getName();
@@ -751,8 +750,7 @@ size_t SelectorTable::getTotalMemory() const {
   return SelTabImpl.Allocator.getTotalMemory();
 }
 
-Selector SelectorTable::getSelector(unsigned nKeys,
-                                    const IdentifierInfo **IIV) {
+Selector SelectorTable::getSelector(unsigned nKeys, IdentifierInfo **IIV) {
   if (nKeys < 2)
     return Selector(IIV[0], nKeys);
 

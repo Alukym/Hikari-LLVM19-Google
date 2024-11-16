@@ -152,13 +152,6 @@ void print(llvm::raw_ostream &OS, const Pointer &P, ASTContext &Ctx,
 }
 
 void InterpFrame::describe(llvm::raw_ostream &OS) const {
-  // We create frames for builtin functions as well, but we can't reliably
-  // diagnose them. The 'in call to' diagnostics for them add no value to the
-  // user _and_ it doesn't generally work since the argument types don't always
-  // match the function prototype. Just ignore them.
-  if (const auto *F = getFunction(); F && F->isBuiltin())
-    return;
-
   const FunctionDecl *F = getCallee();
   if (const auto *M = dyn_cast<CXXMethodDecl>(F);
       M && M->isInstance() && !isa<CXXConstructorDecl>(F)) {
@@ -191,17 +184,12 @@ Frame *InterpFrame::getCaller() const {
 }
 
 SourceRange InterpFrame::getCallRange() const {
-  if (!Caller->Func) {
-    if (SourceRange NullRange = S.getRange(nullptr, {}); NullRange.isValid())
-      return NullRange;
-    return S.EvalLocation;
-  }
+  if (!Caller->Func)
+    return S.getRange(nullptr, {});
   return S.getRange(Caller->Func, RetPC - sizeof(uintptr_t));
 }
 
 const FunctionDecl *InterpFrame::getCallee() const {
-  if (!Func)
-    return nullptr;
   return Func->getDecl();
 }
 
@@ -212,8 +200,10 @@ Pointer InterpFrame::getLocalPointer(unsigned Offset) const {
 
 Pointer InterpFrame::getParamPointer(unsigned Off) {
   // Return the block if it was created previously.
-  if (auto Pt = Params.find(Off); Pt != Params.end())
+  auto Pt = Params.find(Off);
+  if (Pt != Params.end()) {
     return Pointer(reinterpret_cast<Block *>(Pt->second.get()));
+  }
 
   // Allocate memory to store the parameter and the block metadata.
   const auto &Desc = Func->getParamDescriptor(Off);

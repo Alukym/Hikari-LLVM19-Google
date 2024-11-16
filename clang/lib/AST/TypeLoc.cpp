@@ -399,7 +399,6 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::NullPtr:
   case BuiltinType::Overload:
   case BuiltinType::Dependent:
-  case BuiltinType::UnresolvedTemplate:
   case BuiltinType::BoundMember:
   case BuiltinType::UnknownAny:
   case BuiltinType::ARCUnbridgedCast:
@@ -430,7 +429,7 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
 #include "clang/Basic/WebAssemblyReferenceTypes.def"
   case BuiltinType::BuiltinFn:
   case BuiltinType::IncompleteMatrixIdx:
-  case BuiltinType::ArraySection:
+  case BuiltinType::OMPArraySection:
   case BuiltinType::OMPArrayShaping:
   case BuiltinType::OMPIterator:
     return TST_unspecified;
@@ -515,10 +514,6 @@ SourceRange AttributedTypeLoc::getLocalSourceRange() const {
   // That enclosure doesn't necessarily belong to a single attribute
   // anyway.
   return getAttr() ? getAttr()->getRange() : SourceRange();
-}
-
-SourceRange CountAttributedTypeLoc::getLocalSourceRange() const {
-  return getCountExpr() ? getCountExpr()->getSourceRange() : SourceRange();
 }
 
 SourceRange BTFTagAttributedTypeLoc::getLocalSourceRange() const {

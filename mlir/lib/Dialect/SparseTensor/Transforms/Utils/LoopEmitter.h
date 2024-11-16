@@ -11,7 +11,7 @@
 
 #include <vector>
 
-#include "SparseTensorIterator.h"
+#include "SparseTensorLevel.h"
 
 #include "mlir/Dialect/SparseTensor/IR/Enums.h"
 #include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
@@ -222,7 +222,7 @@ public:
   ///
   SmallVector<Value> getValPosits(TensorId tid) const {
     SmallVector<Value> batchCrds = iters[tid].back().back()->getBatchCrds();
-    Value lastLvlPos = iters[tid].back().back()->getCurPosition().front();
+    Value lastLvlPos = iters[tid].back().back()->getCurPosition().first;
     batchCrds.push_back(lastLvlPos);
     return batchCrds;
   };

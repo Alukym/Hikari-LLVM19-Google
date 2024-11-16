@@ -19,8 +19,7 @@
 #include "mlir/Dialect/NVGPU/IR/NVGPUDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Transform/IR/TransformDialect.h"
-#include "mlir/Dialect/Transform/IR/TransformTypes.h"
-#include "mlir/Dialect/Transform/Interfaces/TransformInterfaces.h"
+#include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
 #include "mlir/Interfaces/LoopLikeInterface.h"
@@ -173,8 +172,8 @@ transform::MemRefAllocaToGlobalOp::apply(transform::TransformRewriter &rewriter,
   }
 
   // Assemble results.
-  results.set(cast<OpResult>(getGlobal()), globalOps);
-  results.set(cast<OpResult>(getGetGlobal()), getGlobalOps);
+  results.set(getGlobal().cast<OpResult>(), globalOps);
+  results.set(getGetGlobal().cast<OpResult>(), getGlobalOps);
 
   return DiagnosedSilenceableFailure::success();
 }

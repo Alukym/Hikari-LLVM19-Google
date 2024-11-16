@@ -22,7 +22,7 @@ frameInfo:
   stackSize:       0
   offsetAdjustment: 0
   maxAlignment:    16
-  adjustsStack:    true
+  adjustsStack:    false
   hasCalls:        true
   stackProtector:  ''
   functionContext: ''

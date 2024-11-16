@@ -259,8 +259,6 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_sqrt_pd(__m128d __a) {
 ///    result. The upper 64 bits of the result are copied from the upper
 ///    double-precision value of the first operand.
 ///
-///    If either value in a comparison is NaN, returns the value from \a __b.
-///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> VMINSD / MINSD </c> instruction.
@@ -280,10 +278,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_min_sd(__m128d __a,
 }
 
 /// Performs element-by-element comparison of the two 128-bit vectors of
-///    [2 x double] and returns a vector containing the lesser of each pair of
+///    [2 x double] and returns the vector containing the lesser of each pair of
 ///    values.
-///
-///    If either value in a comparison is NaN, returns the value from \a __b.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -305,8 +301,6 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_min_pd(__m128d __a,
 ///    result. The upper 64 bits of the result are copied from the upper
 ///    double-precision value of the first operand.
 ///
-///    If either value in a comparison is NaN, returns the value from \a __b.
-///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> VMAXSD / MAXSD </c> instruction.
@@ -326,10 +320,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_max_sd(__m128d __a,
 }
 
 /// Performs element-by-element comparison of the two 128-bit vectors of
-///    [2 x double] and returns a vector containing the greater of each pair
+///    [2 x double] and returns the vector containing the greater of each pair
 ///    of values.
-///
-///    If either value in a comparison is NaN, returns the value from \a __b.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -420,8 +412,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_xor_pd(__m128d __a,
 /// Compares each of the corresponding double-precision values of the
 ///    128-bit vectors of [2 x double] for equality.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -441,8 +432,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpeq_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are less than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -462,8 +452,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmplt_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are less than or equal to those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -483,8 +472,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmple_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are greater than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -504,8 +492,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpgt_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are greater than or equal to those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -525,8 +512,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpge_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are ordered with respect to those in the second operand.
 ///
-///    A pair of double-precision values are ordered with respect to each
-///    other if neither value is a NaN. Each comparison returns 0x0 for false,
+///    A pair of double-precision values are "ordered" with respect to each
+///    other if neither value is a NaN. Each comparison yields 0x0 for false,
 ///    0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
@@ -547,8 +534,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpord_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are unordered with respect to those in the second operand.
 ///
-///    A pair of double-precision values are unordered with respect to each
-///    other if one or both values are NaN. Each comparison returns 0x0 for
+///    A pair of double-precision values are "unordered" with respect to each
+///    other if one or both values are NaN. Each comparison yields 0x0 for
 ///    false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
@@ -570,8 +557,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpunord_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are unequal to those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -591,8 +577,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpneq_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are not less than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -612,8 +597,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnlt_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are not less than or equal to those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -633,8 +617,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnle_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are not greater than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -654,8 +637,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpngt_pd(__m128d __a,
 ///    128-bit vectors of [2 x double] to determine if the values in the first
 ///    operand are not greater than or equal to those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -674,8 +656,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnge_pd(__m128d __a,
 /// Compares the lower double-precision floating-point values in each of
 ///    the two 128-bit floating-point vectors of [2 x double] for equality.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -699,8 +680,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpeq_sd(__m128d __a,
 ///    the value in the first parameter is less than the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -724,8 +704,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmplt_sd(__m128d __a,
 ///    the value in the first parameter is less than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -749,8 +728,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmple_sd(__m128d __a,
 ///    the value in the first parameter is greater than the corresponding value
 ///    in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -775,8 +753,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpgt_sd(__m128d __a,
 ///    the value in the first parameter is greater than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns false.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -798,11 +775,11 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpge_sd(__m128d __a,
 
 /// Compares the lower double-precision floating-point values in each of
 ///    the two 128-bit floating-point vectors of [2 x double] to determine if
-///    the value in the first parameter is ordered with respect to the
+///    the value in the first parameter is "ordered" with respect to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true. A pair
-///    of double-precision values are ordered with respect to each other if
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true. A pair
+///    of double-precision values are "ordered" with respect to each other if
 ///    neither value is a NaN.
 ///
 /// \headerfile <x86intrin.h>
@@ -824,11 +801,11 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpord_sd(__m128d __a,
 
 /// Compares the lower double-precision floating-point values in each of
 ///    the two 128-bit floating-point vectors of [2 x double] to determine if
-///    the value in the first parameter is unordered with respect to the
+///    the value in the first parameter is "unordered" with respect to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true. A pair
-///    of double-precision values are unordered with respect to each other if
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true. A pair
+///    of double-precision values are "unordered" with respect to each other if
 ///    one or both values are NaN.
 ///
 /// \headerfile <x86intrin.h>
@@ -854,8 +831,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpunord_sd(__m128d __a,
 ///    the value in the first parameter is unequal to the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -879,8 +855,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpneq_sd(__m128d __a,
 ///    the value in the first parameter is not less than the corresponding
 ///    value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -904,8 +879,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnlt_sd(__m128d __a,
 ///    the value in the first parameter is not less than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -929,8 +903,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnle_sd(__m128d __a,
 ///    the value in the first parameter is not greater than the corresponding
 ///    value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -955,8 +928,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpngt_sd(__m128d __a,
 ///    the value in the first parameter is not greater than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, returns true.
+///    The comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -979,8 +951,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cmpnge_sd(__m128d __a,
 /// Compares the lower double-precision floating-point values in each of
 ///    the two 128-bit floating-point vectors of [2 x double] for equality.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1003,8 +975,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comieq_sd(__m128d __a,
 ///    the value in the first parameter is less than the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1027,8 +999,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comilt_sd(__m128d __a,
 ///    the value in the first parameter is less than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1051,8 +1023,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comile_sd(__m128d __a,
 ///    the value in the first parameter is greater than the corresponding value
 ///    in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1075,8 +1047,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comigt_sd(__m128d __a,
 ///    the value in the first parameter is greater than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1099,8 +1071,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comige_sd(__m128d __a,
 ///    the value in the first parameter is unequal to the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 1.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, 1 is returned.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1121,8 +1093,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_comineq_sd(__m128d __a,
 /// Compares the lower double-precision floating-point values in each of
 ///    the two 128-bit floating-point vectors of [2 x double] for equality.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1145,8 +1117,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_ucomieq_sd(__m128d __a,
 ///    the value in the first parameter is less than the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1169,8 +1141,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_ucomilt_sd(__m128d __a,
 ///    the value in the first parameter is less than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1193,8 +1165,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_ucomile_sd(__m128d __a,
 ///    the value in the first parameter is greater than the corresponding value
 ///    in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1217,8 +1189,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_ucomigt_sd(__m128d __a,
 ///    the value in the first parameter is greater than or equal to the
 ///    corresponding value in the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 0.
+///    The comparison returns 0 for false, 1 for true.  If either of the two
+///    lower double-precision values is NaN, returns 0.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1241,8 +1213,8 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_ucomige_sd(__m128d __a,
 ///    the value in the first parameter is unequal to the corresponding value in
 ///    the second parameter.
 ///
-///    The comparison returns 0 for false, 1 for true. If either value in a
-///    comparison is NaN, returns 1.
+///    The comparison returns 0 for false, 1 for true. If either of the two
+///    lower double-precision values is NaN, 1 is returned.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1322,10 +1294,6 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cvtepi32_pd(__m128i __a) {
 ///    returned in the lower 64 bits of a 128-bit vector of [4 x i32]. The upper
 ///    64 bits of the result vector are set to zero.
 ///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
-///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> VCVTPD2DQ / CVTPD2DQ </c> instruction.
@@ -1340,10 +1308,6 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cvtpd_epi32(__m128d __a) {
 
 /// Converts the low-order element of a 128-bit vector of [2 x double]
 ///    into a 32-bit signed integer value.
-///
-///    If the converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1430,13 +1394,12 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cvtss_sd(__m128d __a,
 }
 
 /// Converts the two double-precision floating-point elements of a
-///    128-bit vector of [2 x double] into two signed truncated (rounded
-///    toward zero) 32-bit integer values, returned in the lower 64 bits
-///    of a 128-bit vector of [4 x i32].
+///    128-bit vector of [2 x double] into two signed 32-bit integer values,
+///    returned in the lower 64 bits of a 128-bit vector of [4 x i32].
 ///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+///    If the result of either conversion is inexact, the result is truncated
+///    (rounded towards zero) regardless of the current MXCSR setting. The upper
+///    64 bits of the result vector are set to zero.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1452,11 +1415,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cvttpd_epi32(__m128d __a) {
 }
 
 /// Converts the low-order element of a [2 x double] vector into a 32-bit
-///    signed truncated (rounded toward zero) integer value.
-///
-///    If the converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+///    signed integer value, truncating the result when it is inexact.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -1475,10 +1434,6 @@ static __inline__ int __DEFAULT_FN_ATTRS _mm_cvttsd_si32(__m128d __a) {
 ///    128-bit vector of [2 x double] into two signed 32-bit integer values,
 ///    returned in a 64-bit vector of [2 x i32].
 ///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
-///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> CVTPD2PI </c> instruction.
@@ -1491,12 +1446,11 @@ static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX _mm_cvtpd_pi32(__m128d __a) {
 }
 
 /// Converts the two double-precision floating-point elements of a
-///    128-bit vector of [2 x double] into two signed truncated (rounded toward
-///    zero) 32-bit integer values, returned in a 64-bit vector of [2 x i32].
+///    128-bit vector of [2 x double] into two signed 32-bit integer values,
+///    returned in a 64-bit vector of [2 x i32].
 ///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+///    If the result of either conversion is inexact, the result is truncated
+///    (rounded towards zero) regardless of the current MXCSR setting.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3061,7 +3015,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_srl_epi64(__m128i __a,
 /// Compares each of the corresponding 8-bit values of the 128-bit
 ///    integer vectors for equality.
 ///
-///    Each comparison returns 0x0 for false, 0xFF for true.
+///    Each comparison yields 0x0 for false, 0xFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3080,7 +3034,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpeq_epi8(__m128i __a,
 /// Compares each of the corresponding 16-bit values of the 128-bit
 ///    integer vectors for equality.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3099,7 +3053,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpeq_epi16(__m128i __a,
 /// Compares each of the corresponding 32-bit values of the 128-bit
 ///    integer vectors for equality.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3119,7 +3073,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpeq_epi32(__m128i __a,
 ///    integer vectors to determine if the values in the first operand are
 ///    greater than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFF for true.
+///    Each comparison yields 0x0 for false, 0xFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3141,7 +3095,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpgt_epi8(__m128i __a,
 ///    128-bit integer vectors to determine if the values in the first operand
 ///    are greater than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3161,7 +3115,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpgt_epi16(__m128i __a,
 ///    128-bit integer vectors to determine if the values in the first operand
 ///    are greater than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3181,7 +3135,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmpgt_epi32(__m128i __a,
 ///    integer vectors to determine if the values in the first operand are less
 ///    than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFF for true.
+///    Each comparison yields 0x0 for false, 0xFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3201,7 +3155,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmplt_epi8(__m128i __a,
 ///    128-bit integer vectors to determine if the values in the first operand
 ///    are less than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3221,7 +3175,7 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cmplt_epi16(__m128i __a,
 ///    128-bit integer vectors to determine if the values in the first operand
 ///    are less than those in the second operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFF for true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3262,11 +3216,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_cvtsi64_sd(__m128d __a,
 }
 
 /// Converts the first (lower) element of a vector of [2 x double] into a
-///    64-bit signed integer value.
-///
-///    If the converted value does not fit in a 64-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+///    64-bit signed integer value, according to the current rounding mode.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3281,11 +3231,7 @@ static __inline__ long long __DEFAULT_FN_ATTRS _mm_cvtsd_si64(__m128d __a) {
 }
 
 /// Converts the first (lower) element of a vector of [2 x double] into a
-///    64-bit signed truncated (rounded toward zero) integer value.
-///
-///    If a converted value does not fit in a 64-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+///    64-bit signed integer value, truncating the result when it is inexact.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -3316,10 +3262,6 @@ static __inline__ __m128 __DEFAULT_FN_ATTRS _mm_cvtepi32_ps(__m128i __a) {
 
 /// Converts a vector of [4 x float] into a vector of [4 x i32].
 ///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
-///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> VCVTPS2DQ / CVTPS2DQ </c> instruction.
@@ -3332,12 +3274,8 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS _mm_cvtps_epi32(__m128 __a) {
   return (__m128i)__builtin_ia32_cvtps2dq((__v4sf)__a);
 }
 
-/// Converts a vector of [4 x float] into four signed truncated (rounded toward
-///    zero) 32-bit integers, returned in a vector of [4 x i32].
-///
-///    If a converted value does not fit in a 32-bit integer, raises a
-///    floating-point invalid exception. If the exception is masked, returns
-///    the most negative integer.
+/// Converts a vector of [4 x float] into a vector of [4 x i32],
+///    truncating the result when it is inexact.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -4805,9 +4743,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_castsi128_pd(__m128i __a) {
 ///    128-bit vectors of [2 x double], using the operation specified by the
 ///    immediate integer operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, comparisons that are ordered
-///    return false, and comparisons that are unordered return true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -4841,9 +4777,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS _mm_castsi128_pd(__m128i __a) {
 ///    two 128-bit vectors of [2 x double], using the operation specified by the
 ///    immediate integer operand.
 ///
-///    Each comparison returns 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
-///    If either value in a comparison is NaN, comparisons that are ordered
-///    return false, and comparisons that are unordered return true.
+///    Each comparison yields 0x0 for false, 0xFFFFFFFFFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///

@@ -148,11 +148,9 @@ void MetadataAsValue::untrack() {
     MetadataTracking::untrack(MD);
 }
 
-DbgVariableRecord *DebugValueUser::getUser() {
-  return static_cast<DbgVariableRecord *>(this);
-}
-const DbgVariableRecord *DebugValueUser::getUser() const {
-  return static_cast<const DbgVariableRecord *>(this);
+DPValue *DebugValueUser::getUser() { return static_cast<DPValue *>(this); }
+const DPValue *DebugValueUser::getUser() const {
+  return static_cast<const DPValue *>(this);
 }
 
 void DebugValueUser::handleChangedValue(void *Old, Metadata *New) {
@@ -268,29 +266,28 @@ SmallVector<Metadata *> ReplaceableMetadataImpl::getAllArgListUsers() {
   return MDUsers;
 }
 
-SmallVector<DbgVariableRecord *>
-ReplaceableMetadataImpl::getAllDbgVariableRecordUsers() {
-  SmallVector<std::pair<OwnerTy, uint64_t> *> DVRUsersWithID;
+SmallVector<DPValue *> ReplaceableMetadataImpl::getAllDPValueUsers() {
+  SmallVector<std::pair<OwnerTy, uint64_t> *> DPVUsersWithID;
   for (auto Pair : UseMap) {
     OwnerTy Owner = Pair.second.first;
     if (Owner.isNull())
       continue;
     if (!Owner.is<DebugValueUser *>())
       continue;
-    DVRUsersWithID.push_back(&UseMap[Pair.first]);
+    DPVUsersWithID.push_back(&UseMap[Pair.first]);
   }
-  // Order DbgVariableRecord users in reverse-creation order. Normal dbg.value
-  // users of MetadataAsValues are ordered by their UseList, i.e. reverse order
-  // of when they were added: we need to replicate that here. The structure of
+  // Order DPValue users in reverse-creation order. Normal dbg.value users
+  // of MetadataAsValues are ordered by their UseList, i.e. reverse order of
+  // when they were added: we need to replicate that here. The structure of
   // debug-info output depends on the ordering of intrinsics, thus we need
   // to keep them consistent for comparisons sake.
-  llvm::sort(DVRUsersWithID, [](auto UserA, auto UserB) {
+  llvm::sort(DPVUsersWithID, [](auto UserA, auto UserB) {
     return UserA->second > UserB->second;
   });
-  SmallVector<DbgVariableRecord *> DVRUsers;
-  for (auto UserWithID : DVRUsersWithID)
-    DVRUsers.push_back(UserWithID->first.get<DebugValueUser *>()->getUser());
-  return DVRUsers;
+  SmallVector<DPValue *> DPVUsers;
+  for (auto UserWithID : DPVUsersWithID)
+    DPVUsers.push_back(UserWithID->first.get<DebugValueUser *>()->getUser());
+  return DPVUsers;
 }
 
 void ReplaceableMetadataImpl::addRef(void *Ref, OwnerTy Owner) {
@@ -1195,7 +1192,8 @@ MDNode *MDNode::mergeDirectCallProfMetadata(MDNode *A, MDNode *B,
          "first operand should be a non-null MDString");
   StringRef AProfName = AMDS->getString();
   StringRef BProfName = BMDS->getString();
-  if (AProfName == "branch_weights" && BProfName == "branch_weights") {
+  if (AProfName.equals("branch_weights") &&
+      BProfName.equals("branch_weights")) {
     ConstantInt *AInstrWeight =
         mdconst::dyn_extract<ConstantInt>(A->getOperand(1));
     ConstantInt *BInstrWeight =

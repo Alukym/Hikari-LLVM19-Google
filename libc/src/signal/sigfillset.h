@@ -9,7 +9,7 @@
 #ifndef LLVM_LIBC_SRC_SIGNAL_SIGFILLSET_H
 #define LLVM_LIBC_SRC_SIGNAL_SIGFILLSET_H
 
-#include "hdr/types/sigset_t.h"
+#include <signal.h>
 
 namespace LIBC_NAMESPACE {
 

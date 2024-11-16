@@ -214,7 +214,7 @@ GPUFuncOpLowering::matchAndRewrite(gpu::GPUFuncOp gpuFuncOp, OpAdaptor adaptor,
        llvm::enumerate(gpuFuncOp.getArgumentTypes())) {
     auto remapping = signatureConversion.getInputMapping(idx);
     NamedAttrList argAttr =
-        argAttrs ? cast<DictionaryAttr>(argAttrs[idx]) : NamedAttrList();
+        argAttrs ? argAttrs[idx].cast<DictionaryAttr>() : NamedAttrList();
     auto copyAttribute = [&](StringRef attrName) {
       Attribute attr = argAttr.erase(attrName);
       if (!attr)
@@ -234,8 +234,9 @@ GPUFuncOpLowering::matchAndRewrite(gpu::GPUFuncOp gpuFuncOp, OpAdaptor adaptor,
         return;
       }
       for (size_t i = 0, e = remapping->size; i < e; ++i) {
-        if (isa<LLVM::LLVMPointerType>(
-                llvmFuncOp.getArgument(remapping->inputNo + i).getType())) {
+        if (llvmFuncOp.getArgument(remapping->inputNo + i)
+                .getType()
+                .isa<LLVM::LLVMPointerType>()) {
           llvmFuncOp.setArgAttr(remapping->inputNo + i, attrName, attr);
         }
       }
@@ -544,7 +545,8 @@ LogicalResult impl::scalarizeVectorOp(Operation *op, ValueRange operands,
                                       ConversionPatternRewriter &rewriter,
                                       const LLVMTypeConverter &converter) {
   TypeRange operandTypes(operands);
-  if (llvm::none_of(operandTypes, llvm::IsaPred<VectorType>)) {
+  if (llvm::none_of(operandTypes,
+                    [](Type type) { return isa<VectorType>(type); })) {
     return rewriter.notifyMatchFailure(op, "expected vector operand");
   }
   if (op->getNumRegions() != 0 || op->getNumSuccessors() != 0)

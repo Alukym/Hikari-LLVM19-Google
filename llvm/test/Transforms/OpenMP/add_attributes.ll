@@ -641,6 +641,8 @@ declare i32 @__tgt_target_teams_mapper(ptr, i64, ptr, i32, ptr, ptr, ptr, ptr, p
 
 declare i32 @__tgt_target_teams_nowait_mapper(ptr, i64, ptr, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32, i32, i32, ptr, i32, ptr)
 
+declare void @__tgt_register_requires(i64)
+
 declare void @__tgt_target_data_begin_mapper(ptr, i64, i32, ptr, ptr, ptr, ptr, ptr, ptr)
 
 declare void @__tgt_target_data_begin_nowait_mapper(ptr, i64, i32, ptr, ptr, ptr, ptr, ptr, ptr)
@@ -1245,6 +1247,9 @@ declare i32 @__tgt_target_kernel_nowait(ptr, i64, i32, i32, ptr, ptr, i32, ptr, 
 
 ; CHECK: ; Function Attrs: nounwind
 ; CHECK-NEXT: declare i32 @__tgt_target_teams_nowait_mapper(ptr, i64, ptr, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32, i32, i32, ptr, i32, ptr)
+
+; CHECK: ; Function Attrs: nounwind
+; CHECK-NEXT: declare void @__tgt_register_requires(i64)
 
 ; CHECK: ; Function Attrs: nounwind
 ; CHECK-NEXT: declare void @__tgt_target_data_begin_mapper(ptr, i64, i32, ptr, ptr, ptr, ptr, ptr, ptr)
@@ -1887,6 +1892,9 @@ declare i32 @__tgt_target_kernel_nowait(ptr, i64, i32, i32, ptr, ptr, i32, ptr, 
 
 ; OPTIMISTIC: ; Function Attrs: nounwind
 ; OPTIMISTIC-NEXT: declare i32 @__tgt_target_teams_nowait_mapper(ptr, i64, ptr, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32, i32, i32, ptr, i32, ptr)
+
+; OPTIMISTIC: ; Function Attrs: nounwind
+; OPTIMISTIC-NEXT: declare void @__tgt_register_requires(i64)
 
 ; OPTIMISTIC: ; Function Attrs: nounwind
 ; OPTIMISTIC-NEXT: declare void @__tgt_target_data_begin_mapper(ptr, i64, i32, ptr, ptr, ptr, ptr, ptr, ptr)
@@ -2542,6 +2550,9 @@ declare i32 @__tgt_target_kernel_nowait(ptr, i64, i32, i32, ptr, ptr, i32, ptr, 
 
 ; EXT: ; Function Attrs: nounwind
 ; EXT-NEXT: declare signext i32 @__tgt_target_teams_nowait_mapper(ptr, i64, ptr, i32 signext, ptr, ptr, ptr, ptr, ptr, ptr, i32 signext, i32 signext, i32 signext, ptr, i32 signext, ptr)
+
+; EXT: ; Function Attrs: nounwind
+; EXT-NEXT: declare void @__tgt_register_requires(i64)
 
 ; EXT: ; Function Attrs: nounwind
 ; EXT-NEXT: declare void @__tgt_target_data_begin_mapper(ptr, i64, i32 signext, ptr, ptr, ptr, ptr, ptr, ptr)

@@ -9,7 +9,7 @@
 #ifndef LLVM_LIBC_SRC_FENV_FEUPDATEENV_H
 #define LLVM_LIBC_SRC_FENV_FEUPDATEENV_H
 
-#include "hdr/types/fenv_t.h"
+#include <fenv.h>
 
 namespace LIBC_NAMESPACE {
 

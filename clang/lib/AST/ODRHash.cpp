@@ -696,12 +696,6 @@ void ODRHash::AddFunctionDecl(const FunctionDecl *Function,
   AddBoolean(Function->isDeletedAsWritten());
   AddBoolean(Function->isExplicitlyDefaulted());
 
-  StringLiteral *DeletedMessage = Function->getDeletedMessage();
-  AddBoolean(DeletedMessage);
-
-  if (DeletedMessage)
-    ID.AddString(DeletedMessage->getBytes());
-
   AddDecl(Function);
 
   AddQualType(Function->getReturnType());
@@ -948,10 +942,6 @@ public:
   void VisitConstantArrayType(const ConstantArrayType *T) {
     T->getSize().Profile(ID);
     VisitArrayType(T);
-  }
-
-  void VisitArrayParameterType(const ArrayParameterType *T) {
-    VisitConstantArrayType(T);
   }
 
   void VisitDependentSizedArrayType(const DependentSizedArrayType *T) {

@@ -9,7 +9,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMInterface.h"
-#include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/IRMapping.h"
@@ -42,10 +41,8 @@ void FuncDialect::initialize() {
 #define GET_OP_LIST
 #include "mlir/Dialect/Func/IR/FuncOps.cpp.inc"
       >();
-  declarePromisedInterface<DialectInlinerInterface, FuncDialect>();
-  declarePromisedInterface<ConvertToLLVMPatternInterface, FuncDialect>();
-  declarePromisedInterfaces<bufferization::BufferizableOpInterface, CallOp,
-                            FuncOp, ReturnOp>();
+  declarePromisedInterface<FuncDialect, DialectInlinerInterface>();
+  declarePromisedInterface<FuncDialect, ConvertToLLVMPatternInterface>();
 }
 
 /// Materialize a single constant operation from a given attribute value with

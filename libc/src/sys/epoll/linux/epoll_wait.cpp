@@ -8,14 +8,16 @@
 
 #include "src/sys/epoll/epoll_wait.h"
 
-#include "hdr/signal_macros.h" // for NSIG
-#include "hdr/types/sigset_t.h"
-#include "hdr/types/struct_epoll_event.h"
 #include "src/__support/OSUtil/syscall.h" // For internal syscall function.
 #include "src/__support/common.h"
 #include "src/errno/libc_errno.h"
-
 #include <sys/syscall.h> // For syscall numbers.
+
+// TODO: Use this include once the include headers are also using quotes.
+// #include "include/llvm-libc-types/sigset_t.h"
+// #include "include/llvm-libc-types/struct_epoll_event.h"
+
+#include <sys/epoll.h>
 
 namespace LIBC_NAMESPACE {
 
@@ -28,7 +30,7 @@ LLVM_LIBC_FUNCTION(int, epoll_wait,
 #elif defined(SYS_epoll_pwait)
   int ret = LIBC_NAMESPACE::syscall_impl<int>(
       SYS_epoll_pwait, epfd, reinterpret_cast<long>(events), maxevents, timeout,
-      reinterpret_cast<long>(nullptr), NSIG / 8);
+      reinterpret_cast<long>(nullptr), sizeof(sigset_t));
 #else
 #error "epoll_wait and epoll_pwait are unavailable. Unable to build epoll_wait."
 #endif
@@ -39,7 +41,7 @@ LLVM_LIBC_FUNCTION(int, epoll_wait,
     return -1;
   }
 
-  return ret;
+  return 0;
 }
 
 } // namespace LIBC_NAMESPACE

@@ -242,9 +242,7 @@ void BPFDAGToDAGISel::PreprocessLoad(SDNode *Node,
   bool to_replace = false;
   SDLoc DL(Node);
   const LoadSDNode *LD = cast<LoadSDNode>(Node);
-  if (!LD->getMemOperand()->getSize().hasValue())
-    return;
-  uint64_t size = LD->getMemOperand()->getSize().getValue();
+  uint64_t size = LD->getMemOperand()->getSize();
 
   if (!size || size > 8 || (size & (size - 1)) || !LD->isSimple())
     return;

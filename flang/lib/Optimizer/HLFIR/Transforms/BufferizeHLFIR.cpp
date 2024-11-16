@@ -77,7 +77,7 @@ static mlir::Value packageBufferizedExpr(mlir::Location loc,
 /// currently enforced by the verifiers that only accept HLFIR value or
 /// variable types which do not include tuples.
 static hlfir::Entity getBufferizedExprStorage(mlir::Value bufferizedExpr) {
-  auto tupleType = mlir::dyn_cast<mlir::TupleType>(bufferizedExpr.getType());
+  auto tupleType = bufferizedExpr.getType().dyn_cast<mlir::TupleType>();
   if (!tupleType)
     return hlfir::Entity{bufferizedExpr};
   assert(tupleType.size() == 2 && "unexpected tuple type");
@@ -90,7 +90,7 @@ static hlfir::Entity getBufferizedExprStorage(mlir::Value bufferizedExpr) {
 /// Helper to extract the clean-up flag from a tuple created by
 /// packageBufferizedExpr.
 static mlir::Value getBufferizedExprMustFreeFlag(mlir::Value bufferizedExpr) {
-  auto tupleType = mlir::dyn_cast<mlir::TupleType>(bufferizedExpr.getType());
+  auto tupleType = bufferizedExpr.getType().dyn_cast<mlir::TupleType>();
   if (!tupleType)
     return bufferizedExpr;
   assert(tupleType.size() == 2 && "unexpected tuple type");
@@ -122,10 +122,9 @@ createArrayTemp(mlir::Location loc, fir::FirOpBuilder &builder,
         fir::FortranVariableFlagsAttr::get(
             builder.getContext(), fir::FortranVariableFlagsEnum::allocatable);
 
-    auto declareOp =
-        builder.create<hlfir::DeclareOp>(loc, alloc, tmpName,
-                                         /*shape=*/nullptr, lenParams,
-                                         /*dummy_scope=*/nullptr, declAttrs);
+    auto declareOp = builder.create<hlfir::DeclareOp>(loc, alloc, tmpName,
+                                                      /*shape=*/nullptr,
+                                                      lenParams, declAttrs);
 
     int rank = extents.size();
     fir::runtime::genAllocatableApplyMold(builder, loc, alloc,
@@ -153,9 +152,9 @@ createArrayTemp(mlir::Location loc, fir::FirOpBuilder &builder,
 
   mlir::Value allocmem = builder.createHeapTemporary(loc, sequenceType, tmpName,
                                                      extents, lenParams);
-  auto declareOp = builder.create<hlfir::DeclareOp>(
-      loc, allocmem, tmpName, shape, lenParams,
-      /*dummy_scope=*/nullptr, fir::FortranVariableFlagsAttr{});
+  auto declareOp =
+      builder.create<hlfir::DeclareOp>(loc, allocmem, tmpName, shape, lenParams,
+                                       fir::FortranVariableFlagsAttr{});
   mlir::Value trueVal = builder.createBool(loc, true);
   return {hlfir::Entity{declareOp.getBase()}, trueVal};
 }
@@ -219,7 +218,7 @@ struct ShapeOfOpConversion
     } else {
       // everything else failed so try to create a shape from static type info
       hlfir::ExprType exprTy =
-          mlir::dyn_cast_or_null<hlfir::ExprType>(adaptor.getExpr().getType());
+          adaptor.getExpr().getType().dyn_cast_or_null<hlfir::ExprType>();
       if (exprTy)
         shape = hlfir::genExprShape(builder, loc, exprTy);
     }
@@ -332,7 +331,7 @@ struct SetLengthOpConversion
                                           /*shape=*/std::nullopt, lenParams);
     auto declareOp = builder.create<hlfir::DeclareOp>(
         loc, alloca, tmpName, /*shape=*/mlir::Value{}, lenParams,
-        /*dummy_scope=*/nullptr, fir::FortranVariableFlagsAttr{});
+        fir::FortranVariableFlagsAttr{});
     hlfir::Entity temp{declareOp.getBase()};
     // Assign string value to the created temp.
     builder.create<hlfir::AssignOp>(loc, string, temp,
@@ -481,10 +480,10 @@ struct AssociateOpConversion
           assert(mlir::isa<fir::ClassType>(sourceVar.getType()) &&
                  fir::isAllocatableType(sourceVar.getType()));
           assert(sourceVar.getType() == assocType);
-        } else if ((mlir::isa<fir::BaseBoxType>(sourceVar.getType()) &&
-                    !mlir::isa<fir::BaseBoxType>(assocType)) ||
-                   ((mlir::isa<fir::BoxCharType>(sourceVar.getType()) &&
-                     !mlir::isa<fir::BoxCharType>(assocType)))) {
+        } else if ((sourceVar.getType().isa<fir::BaseBoxType>() &&
+                    !assocType.isa<fir::BaseBoxType>()) ||
+                   ((sourceVar.getType().isa<fir::BoxCharType>() &&
+                     !assocType.isa<fir::BoxCharType>()))) {
           sourceVar = builder.create<fir::BoxAddrOp>(loc, assocType, sourceVar);
         } else {
           sourceVar = builder.createConvert(loc, assocType, sourceVar);
@@ -591,13 +590,13 @@ static void genBufferDestruction(mlir::Location loc, fir::FirOpBuilder &builder,
       // for MERGE with polymorphic results.
       if (mustFinalize)
         TODO(loc, "finalizing polymorphic temporary in HLFIR");
-    } else if (mlir::isa<fir::BaseBoxType, fir::BoxCharType>(var.getType())) {
+    } else if (var.getType().isa<fir::BaseBoxType, fir::BoxCharType>()) {
       if (mustFinalize && !mlir::isa<fir::BaseBoxType>(var.getType()))
         fir::emitFatalError(loc, "non-finalizable variable");
 
       addr = builder.create<fir::BoxAddrOp>(loc, heapType, var);
     } else {
-      if (!mlir::isa<fir::HeapType>(var.getType()))
+      if (!var.getType().isa<fir::HeapType>())
         addr = builder.create<fir::ConvertOp>(loc, heapType, var);
 
       if (mustFinalize || deallocComponents) {
@@ -832,7 +831,7 @@ struct ElementalOpConversion
       // the assign, insert an hlfir.destroy to mark the expression end-of-life.
       // If the expression creation allocated a buffer on the heap inside the
       // loop, this will ensure the buffer properly deallocated.
-      if (mlir::isa<hlfir::ExprType>(elementValue.getType()) &&
+      if (elementValue.getType().isa<hlfir::ExprType>() &&
           wasCreatedInCurrentBlock(elementValue, builder))
         builder.create<hlfir::DestroyOp>(loc, elementValue);
     }
@@ -927,12 +926,11 @@ public:
                         hlfir::EndAssociateOp, hlfir::SetLengthOp>();
 
     target.markUnknownOpDynamicallyLegal([](mlir::Operation *op) {
-      return llvm::all_of(op->getResultTypes(),
-                          [](mlir::Type ty) {
-                            return !mlir::isa<hlfir::ExprType>(ty);
-                          }) &&
+      return llvm::all_of(
+                 op->getResultTypes(),
+                 [](mlir::Type ty) { return !ty.isa<hlfir::ExprType>(); }) &&
              llvm::all_of(op->getOperandTypes(), [](mlir::Type ty) {
-               return !mlir::isa<hlfir::ExprType>(ty);
+               return !ty.isa<hlfir::ExprType>();
              });
     });
     if (mlir::failed(

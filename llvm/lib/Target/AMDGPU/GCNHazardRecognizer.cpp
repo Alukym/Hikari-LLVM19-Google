@@ -241,7 +241,7 @@ GCNHazardRecognizer::getHazardType(SUnit *SU, int Stalls) {
        (ST.hasReadM0SendMsgHazard() && isSendMsgTraceDataOrGDS(TII, *MI)) ||
        (ST.hasReadM0LdsDmaHazard() && isLdsDma(*MI)) ||
        (ST.hasReadM0LdsDirectHazard() &&
-        MI->readsRegister(AMDGPU::LDS_DIRECT, /*TRI=*/nullptr))) &&
+        MI->readsRegister(AMDGPU::LDS_DIRECT))) &&
       checkReadM0Hazards(MI) > 0)
     return HazardType;
 
@@ -381,8 +381,7 @@ unsigned GCNHazardRecognizer::PreEmitNoopsCommon(MachineInstr *MI) {
         MI->getOpcode() == AMDGPU::DS_READ_ADDTID_B32)) ||
       (ST.hasReadM0SendMsgHazard() && isSendMsgTraceDataOrGDS(TII, *MI)) ||
       (ST.hasReadM0LdsDmaHazard() && isLdsDma(*MI)) ||
-      (ST.hasReadM0LdsDirectHazard() &&
-       MI->readsRegister(AMDGPU::LDS_DIRECT, /*TRI=*/nullptr)))
+      (ST.hasReadM0LdsDirectHazard() && MI->readsRegister(AMDGPU::LDS_DIRECT)))
     return std::max(WaitStates, checkReadM0Hazards(MI));
 
   if (SIInstrInfo::isMAI(*MI))
@@ -1162,7 +1161,7 @@ bool GCNHazardRecognizer::fixVMEMtoScalarWriteHazards(MachineInstr *MI) {
 
     for (const MachineOperand &Def : MI->defs()) {
       const MachineOperand *Op =
-          I.findRegisterUseOperand(Def.getReg(), TRI, false);
+          I.findRegisterUseOperand(Def.getReg(), false, TRI);
       if (!Op)
         continue;
       return true;
@@ -2342,7 +2341,7 @@ int GCNHazardRecognizer::checkMAIHazards90A(MachineInstr *MI) {
         case 8:
           NeedWaitStates = SMFMA16x16WritesVGPROverlappedSrcABWaitStates;
           break;
-        case 16:
+        case 16: [[fallthrough]];
         default:
           NeedWaitStates = SMFMA32x32WritesVGPROverlappedSrcABWaitStates;
         }
@@ -2357,9 +2356,6 @@ int GCNHazardRecognizer::checkMAIHazards90A(MachineInstr *MI) {
     if (WaitStatesNeeded == MaxWaitStates)
       break;
   }
-
-  // Pad neighboring MFMA with noops for better inter-wave performance.
-  WaitStatesNeeded = std::max(WaitStatesNeeded, checkMFMAPadding(MI));
 
   return WaitStatesNeeded;
 }

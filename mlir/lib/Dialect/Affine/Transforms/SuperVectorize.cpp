@@ -609,8 +609,9 @@ makePattern(const DenseSet<Operation *> &parallelLoops, int vectorRank,
 }
 
 static NestedPattern &vectorTransferPattern() {
-  static auto pattern = affine::matcher::Op(
-      llvm::IsaPred<vector::TransferReadOp, vector::TransferWriteOp>);
+  static auto pattern = affine::matcher::Op([](Operation &op) {
+    return isa<vector::TransferReadOp, vector::TransferWriteOp>(op);
+  });
   return pattern;
 }
 

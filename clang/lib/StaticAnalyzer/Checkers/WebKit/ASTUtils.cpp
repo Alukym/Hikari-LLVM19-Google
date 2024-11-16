@@ -16,9 +16,8 @@
 
 namespace clang {
 
-bool tryToFindPtrOrigin(
-    const Expr *E, bool StopAtFirstRefCountedObj,
-    std::function<bool(const clang::Expr *, bool)> callback) {
+std::pair<const Expr *, bool>
+tryToFindPtrOrigin(const Expr *E, bool StopAtFirstRefCountedObj) {
   while (E) {
     if (auto *tempExpr = dyn_cast<MaterializeTemporaryExpr>(E)) {
       E = tempExpr->getSubExpr();
@@ -28,22 +27,12 @@ bool tryToFindPtrOrigin(
       E = tempExpr->getSubExpr();
       continue;
     }
-    if (auto *tempExpr = dyn_cast<ParenExpr>(E)) {
-      E = tempExpr->getSubExpr();
-      continue;
-    }
-    if (auto *Expr = dyn_cast<ConditionalOperator>(E)) {
-      return tryToFindPtrOrigin(Expr->getTrueExpr(), StopAtFirstRefCountedObj,
-                                callback) &&
-             tryToFindPtrOrigin(Expr->getFalseExpr(), StopAtFirstRefCountedObj,
-                                callback);
-    }
     if (auto *cast = dyn_cast<CastExpr>(E)) {
       if (StopAtFirstRefCountedObj) {
         if (auto *ConversionFunc =
                 dyn_cast_or_null<FunctionDecl>(cast->getConversionFunction())) {
           if (isCtorOfRefCounted(ConversionFunc))
-            return callback(E, true);
+            return {E, true};
         }
       }
       // FIXME: This can give false "origin" that would lead to false negatives
@@ -54,11 +43,12 @@ bool tryToFindPtrOrigin(
     if (auto *call = dyn_cast<CallExpr>(E)) {
       if (auto *memberCall = dyn_cast<CXXMemberCallExpr>(call)) {
         if (auto *decl = memberCall->getMethodDecl()) {
-          std::optional<bool> IsGetterOfRefCt = isGetterOfRefCounted(decl);
+          std::optional<bool> IsGetterOfRefCt =
+              isGetterOfRefCounted(memberCall->getMethodDecl());
           if (IsGetterOfRefCt && *IsGetterOfRefCt) {
             E = memberCall->getImplicitObjectArgument();
             if (StopAtFirstRefCountedObj) {
-              return callback(E, true);
+              return {E, true};
             }
             continue;
           }
@@ -75,17 +65,17 @@ bool tryToFindPtrOrigin(
       if (auto *callee = call->getDirectCallee()) {
         if (isCtorOfRefCounted(callee)) {
           if (StopAtFirstRefCountedObj)
-            return callback(E, true);
+            return {E, true};
 
           E = call->getArg(0);
           continue;
         }
 
         if (isReturnValueRefCounted(callee))
-          return callback(E, true);
+          return {E, true};
 
         if (isSingleton(callee))
-          return callback(E, true);
+          return {E, true};
 
         if (isPtrConversion(callee)) {
           E = call->getArg(0);
@@ -102,7 +92,7 @@ bool tryToFindPtrOrigin(
     break;
   }
   // Some other expression.
-  return callback(E, false);
+  return {E, false};
 }
 
 bool isASafeCallArg(const Expr *E) {

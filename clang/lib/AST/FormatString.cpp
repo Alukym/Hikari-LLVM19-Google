@@ -413,7 +413,7 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
         return Match;
       if (const auto *BT = argTy->getAs<BuiltinType>()) {
         // Check if the only difference between them is signed vs unsigned
-        // if true, return match signedness.
+        // if true, we consider they are compatible.
         switch (BT->getKind()) {
           default:
             break;
@@ -423,53 +423,44 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
             [[fallthrough]];
           case BuiltinType::Char_S:
           case BuiltinType::SChar:
-            if (T == C.UnsignedShortTy || T == C.ShortTy)
-              return NoMatchTypeConfusion;
-            if (T == C.UnsignedCharTy)
-              return NoMatchSignedness;
-            if (T == C.SignedCharTy)
-              return Match;
-            break;
           case BuiltinType::Char_U:
           case BuiltinType::UChar:
             if (T == C.UnsignedShortTy || T == C.ShortTy)
               return NoMatchTypeConfusion;
-            if (T == C.UnsignedCharTy)
+            if (T == C.UnsignedCharTy || T == C.SignedCharTy)
               return Match;
-            if (T == C.SignedCharTy)
-              return NoMatchSignedness;
             break;
           case BuiltinType::Short:
             if (T == C.UnsignedShortTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::UShort:
             if (T == C.ShortTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::Int:
             if (T == C.UnsignedIntTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::UInt:
             if (T == C.IntTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::Long:
             if (T == C.UnsignedLongTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::ULong:
             if (T == C.LongTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::LongLong:
             if (T == C.UnsignedLongLongTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           case BuiltinType::ULongLong:
             if (T == C.LongLongTy)
-              return NoMatchSignedness;
+              return Match;
             break;
           }
           // "Partially matched" because of promotions?

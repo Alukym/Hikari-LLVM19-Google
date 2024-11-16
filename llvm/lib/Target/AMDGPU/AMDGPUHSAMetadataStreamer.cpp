@@ -19,8 +19,6 @@
 #include "SIMachineFunctionInfo.h"
 #include "SIProgramInfo.h"
 #include "llvm/IR/Module.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCExpr.h"
 using namespace llvm;
 
 static std::pair<Type *, Align> getArgumentTypeAlign(const Argument &Arg,
@@ -464,16 +462,6 @@ MetadataStreamerMsgPackV4::getHSAKernelProps(const MachineFunction &MF,
   const SIMachineFunctionInfo &MFI = *MF.getInfo<SIMachineFunctionInfo>();
   const Function &F = MF.getFunction();
 
-  auto GetMCExprValue = [&MF](const MCExpr *Value) {
-    int64_t Val;
-    if (!Value->evaluateAsAbsolute(Val)) {
-      MCContext &Ctx = MF.getContext();
-      Ctx.reportError(SMLoc(), "could not resolve expression when required.");
-      Val = 0;
-    }
-    return static_cast<uint64_t>(Val);
-  };
-
   auto Kern = HSAMetadataDoc->getMapNode();
 
   Align MaxKernArgAlign;
@@ -482,11 +470,10 @@ MetadataStreamerMsgPackV4::getHSAKernelProps(const MachineFunction &MF,
   Kern[".group_segment_fixed_size"] =
       Kern.getDocument()->getNode(ProgramInfo.LDSSize);
   Kern[".private_segment_fixed_size"] =
-      Kern.getDocument()->getNode(GetMCExprValue(ProgramInfo.ScratchSize));
-  if (CodeObjectVersion >= AMDGPU::AMDHSA_COV5) {
-    Kern[".uses_dynamic_stack"] = Kern.getDocument()->getNode(
-        static_cast<bool>(GetMCExprValue(ProgramInfo.DynamicCallStack)));
-  }
+      Kern.getDocument()->getNode(ProgramInfo.ScratchSize);
+  if (CodeObjectVersion >= AMDGPU::AMDHSA_COV5)
+    Kern[".uses_dynamic_stack"] =
+        Kern.getDocument()->getNode(ProgramInfo.DynamicCallStack);
 
   if (CodeObjectVersion >= AMDGPU::AMDHSA_COV5 && STM.supportsWGP())
     Kern[".workgroup_processor_mode"] =
@@ -497,15 +484,12 @@ MetadataStreamerMsgPackV4::getHSAKernelProps(const MachineFunction &MF,
       Kern.getDocument()->getNode(std::max(Align(4), MaxKernArgAlign).value());
   Kern[".wavefront_size"] =
       Kern.getDocument()->getNode(STM.getWavefrontSize());
-  Kern[".sgpr_count"] =
-      Kern.getDocument()->getNode(GetMCExprValue(ProgramInfo.NumSGPR));
-  Kern[".vgpr_count"] =
-      Kern.getDocument()->getNode(GetMCExprValue(ProgramInfo.NumVGPR));
+  Kern[".sgpr_count"] = Kern.getDocument()->getNode(ProgramInfo.NumSGPR);
+  Kern[".vgpr_count"] = Kern.getDocument()->getNode(ProgramInfo.NumVGPR);
 
   // Only add AGPR count to metadata for supported devices
   if (STM.hasMAIInsts()) {
-    Kern[".agpr_count"] =
-        Kern.getDocument()->getNode(GetMCExprValue(ProgramInfo.NumAccVGPR));
+    Kern[".agpr_count"] = Kern.getDocument()->getNode(ProgramInfo.NumAccVGPR);
   }
 
   Kern[".max_flat_workgroup_size"] =

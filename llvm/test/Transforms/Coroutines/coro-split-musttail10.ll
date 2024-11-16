@@ -1,12 +1,9 @@
 ; Tests that we would convert coro.resume to a musttail call if the target is
-; Wasm64 or Wasm32 with tail-call support.
-; REQUIRES: webassembly-registered-target
+; Wasm64 with tail-call support.
+; RUN: opt < %s -passes='cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
+; RUN: opt < %s -passes='pgo-instr-gen,cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
 
-; RUN: opt -mtriple=wasm64-unknown-unknown < %s -passes='cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
-; RUN: opt -mtriple=wasm64-unknown-unknown < %s -passes='pgo-instr-gen,cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
-
-; RUN: opt -mtriple=wasm32-unknown-unknown < %s -passes='cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
-; RUN: opt -mtriple=wasm32-unknown-unknown < %s -passes='pgo-instr-gen,cgscc(coro-split),simplifycfg,early-cse' -S | FileCheck %s
+target triple = "wasm64-unknown-unknown"
 
 define void @f() #0 {
 entry:

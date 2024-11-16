@@ -252,10 +252,6 @@ public:
   LLVM_PREFERRED_TYPE(bool)
   unsigned ModulesSkipPragmaDiagnosticMappings : 1;
 
-  /// Whether to prune non-affecting module map files from PCM files.
-  LLVM_PREFERRED_TYPE(bool)
-  unsigned ModulesPruneNonAffectingModuleMaps : 1;
-
   LLVM_PREFERRED_TYPE(bool)
   unsigned ModulesHashContent : 1;
 
@@ -284,8 +280,7 @@ public:
         ModulesValidateDiagnosticOptions(true),
         ModulesSkipDiagnosticOptions(false),
         ModulesSkipHeaderSearchPaths(false),
-        ModulesSkipPragmaDiagnosticMappings(false),
-        ModulesPruneNonAffectingModuleMaps(true), ModulesHashContent(false),
+        ModulesSkipPragmaDiagnosticMappings(false), ModulesHashContent(false),
         ModulesStrictContextHash(false), ModulesIncludeVFSUsage(false) {}
 
   /// AddPath - Add the \p Path path to the specified \p Group list.

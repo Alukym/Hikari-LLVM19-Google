@@ -54,7 +54,6 @@ add_llvm_target(BPFCodeGen
   GlobalISel
   IPO
   MC
-  Passes
   Scalar
   SelectionDAG
   Support

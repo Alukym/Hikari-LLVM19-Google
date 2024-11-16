@@ -35,8 +35,7 @@ public:
   void emitCurrentConstantPool();
 
   /// Callback used to implement the .note.gnu.property section.
-  void emitNoteSection(unsigned Flags, uint64_t PAuthABIPlatform = -1,
-                       uint64_t PAuthABIVersion = -1);
+  void emitNoteSection(unsigned Flags);
 
   /// Callback used to implement the .inst directive.
   virtual void emitInst(uint32_t Inst);

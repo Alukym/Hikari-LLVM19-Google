@@ -27,6 +27,7 @@
 #include "bolt/Passes/Inliner.h"
 #include "bolt/Core/MCPlus.h"
 #include "llvm/Support/CommandLine.h"
+#include <map>
 
 #define DEBUG_TYPE "bolt-inliner"
 

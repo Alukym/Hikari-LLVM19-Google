@@ -292,7 +292,9 @@ class LinuxCoreTestCase(TestBase):
         self.dbg.DeleteTarget(target)
 
     @skipIfLLVMTargetMissing("AArch64")
-    # This test fails on FreeBSD 12 and earlier, see llvm.org/pr49415 for details.
+    @expectedFailureAll(
+        archs=["aarch64"], oslist=["freebsd"], bugnumber="llvm.org/pr49415"
+    )
     def test_aarch64_regs(self):
         # check 64 bit ARM core files
         target = self.dbg.CreateTarget(None)
@@ -375,7 +377,9 @@ class LinuxCoreTestCase(TestBase):
         self.expect("register read --all")
 
     @skipIfLLVMTargetMissing("AArch64")
-    # This test fails on FreeBSD 12 and earlier, see llvm.org/pr49415 for details.
+    @expectedFailureAll(
+        archs=["aarch64"], oslist=["freebsd"], bugnumber="llvm.org/pr49415"
+    )
     def test_aarch64_sve_regs_fpsimd(self):
         # check 64 bit ARM core files
         target = self.dbg.CreateTarget(None)

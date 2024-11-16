@@ -1,12 +1,3 @@
-BOLT:
-  - bolt/**/*
-
-ClangIR:
-  - clang/include/clang/CIR/**/*
-  - clang/lib/CIR/**/*
-  - clang/tools/cir-*/**/*
-  - clang/test/CIR/**/*
-
 clang:dataflow:
   - clang/include/clang/Analysis/FlowSensitive/**/*
   - clang/lib/Analysis/FlowSensitive/**/*
@@ -470,7 +461,6 @@ backend:m68k:
 
 libc++:
   - libcxx/**
-  - .github/workflows/libcxx-*
 
 libc++abi:
   - libcxxabi/**
@@ -639,8 +629,6 @@ backend:DirectX:
   - '**/*DirectX*/**'
   - '**/*DXIL*/**'
   - '**/*dxil*/**'
-  - '**/*DXContainer*'
-  - '**/*DXContainer*/**'
 
 backend:SPIR-V:
   - clang/lib/Driver/ToolChains/SPIRV.*
@@ -945,9 +933,3 @@ openmp:libomp:
 
 openmp:libomptarget:
   - any: ['openmp/**', '!openmp/runtime/**']
-
-bazel:
-  - utils/bazel/**
-
-offload:
-  - offload/**

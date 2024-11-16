@@ -238,7 +238,6 @@ public:
   bool isShuffleMaskLegal(ArrayRef<int> Mask, EVT VT) const override {
     return false;
   }
-  bool shouldConsiderGEPOffsetSplit() const override { return true; }
 
 private:
   /// Target-specific function used to lower LoongArch calling conventions.
@@ -263,8 +262,6 @@ private:
                            unsigned Opc, bool Large = false) const;
   SDValue getDynamicTLSAddr(GlobalAddressSDNode *N, SelectionDAG &DAG,
                             unsigned Opc, bool Large = false) const;
-  SDValue getTLSDescAddr(GlobalAddressSDNode *N, SelectionDAG &DAG,
-                         unsigned Opc, bool Large = false) const;
   SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;

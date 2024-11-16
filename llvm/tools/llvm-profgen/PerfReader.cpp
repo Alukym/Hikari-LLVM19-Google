@@ -11,7 +11,6 @@
 #include "llvm/DebugInfo/Symbolize/SymbolizableModule.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Process.h"
-#include "llvm/Support/ToolOutputFile.h"
 
 #define DEBUG_TYPE "perf-reader"
 
@@ -376,9 +375,6 @@ PerfScriptReader::convertPerfDataToTrace(ProfiledBinary *Binary,
                                           StringRef(ErrorFile)};    // Stderr
   sys::ExecuteAndWait(PerfPath, ScriptMMapArgs, std::nullopt, Redirects);
 
-  PerfScriptReader::TempFileCleanups.emplace_back(PerfTraceFile);
-  PerfScriptReader::TempFileCleanups.emplace_back(ErrorFile);
-
   // Collect the PIDs
   TraceStream TraceIt(PerfTraceFile);
   std::string PIDs;
@@ -412,22 +408,9 @@ PerfScriptReader::convertPerfDataToTrace(ProfiledBinary *Binary,
           PerfContent::UnknownContent};
 }
 
-static StringRef filename(StringRef Path, bool UseBackSlash) {
-  llvm::sys::path::Style PathStyle =
-      UseBackSlash ? llvm::sys::path::Style::windows_backslash
-                   : llvm::sys::path::Style::native;
-  StringRef FileName = llvm::sys::path::filename(Path, PathStyle);
-
-  // In case this file use \r\n as newline.
-  if (UseBackSlash && FileName.back() == '\r')
-    return FileName.drop_back();
-
-  return FileName;
-}
-
 void PerfScriptReader::updateBinaryAddress(const MMapEvent &Event) {
   // Drop the event which doesn't belong to user-provided binary
-  StringRef BinaryName = filename(Event.BinaryPath, Binary->isCOFF());
+  StringRef BinaryName = llvm::sys::path::filename(Event.BinaryPath);
   if (Binary->getName() != BinaryName)
     return;
 
@@ -992,7 +975,7 @@ bool PerfScriptReader::extractMMap2EventForBinary(ProfiledBinary *Binary,
            << format("0x%" PRIx64 ":", MMap.Address) << " \n";
   }
 
-  StringRef BinaryName = filename(MMap.BinaryPath, Binary->isCOFF());
+  StringRef BinaryName = llvm::sys::path::filename(MMap.BinaryPath);
   return Binary->getName() == BinaryName;
 }
 
@@ -1223,8 +1206,6 @@ void PerfScriptReader::parsePerfTraces() {
   if (SkipSymbolization)
     writeUnsymbolizedProfile(OutputFilename);
 }
-
-SmallVector<CleanupInstaller, 2> PerfScriptReader::TempFileCleanups;
 
 } // end namespace sampleprof
 } // end namespace llvm

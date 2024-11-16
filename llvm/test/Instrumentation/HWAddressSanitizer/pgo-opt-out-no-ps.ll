@@ -1,5 +1,7 @@
-; RUN: opt < %s -passes='require<profile-summary>,hwasan' -S                                      | FileCheck %s --check-prefix=FULL
-; RUN: opt < %s -passes='require<profile-summary>,hwasan' -S -hwasan-percentile-cutoff-hot=990000 | FileCheck %s --check-prefix=SELSAN
+; RUN: opt < %s -passes='require<profile-summary>,hwasan' -S  \
+; RUN:   -hwasan-selective-instrumentation=0 | FileCheck %s --check-prefix=FULL
+; RUN: opt < %s -passes='require<profile-summary>,hwasan' -S  \
+; RUN:   -hwasan-selective-instrumentation=1 | FileCheck %s --check-prefix=SELSAN
 
 ; FULL: @not_sanitized
 ; FULL-NEXT: %x = alloca i8, i64 4

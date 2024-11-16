@@ -119,15 +119,15 @@ enum {
 #include "InterpreterPropertiesEnum.inc"
 };
 
-llvm::StringRef CommandInterpreter::GetStaticBroadcasterClass() {
-  static constexpr llvm::StringLiteral class_name("lldb.commandInterpreter");
+ConstString &CommandInterpreter::GetStaticBroadcasterClass() {
+  static ConstString class_name("lldb.commandInterpreter");
   return class_name;
 }
 
 CommandInterpreter::CommandInterpreter(Debugger &debugger,
                                        bool synchronous_execution)
     : Broadcaster(debugger.GetBroadcasterManager(),
-                  CommandInterpreter::GetStaticBroadcasterClass().str()),
+                  CommandInterpreter::GetStaticBroadcasterClass().AsCString()),
       Properties(
           OptionValuePropertiesSP(new OptionValueProperties("interpreter"))),
       IOHandlerDelegate(IOHandlerDelegate::Completion::LLDBCommand),

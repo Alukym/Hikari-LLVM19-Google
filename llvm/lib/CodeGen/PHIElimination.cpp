@@ -549,7 +549,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
       MachineBasicBlock::iterator KillInst = opBlock.end();
       for (MachineBasicBlock::iterator Term = InsertPos; Term != opBlock.end();
            ++Term) {
-        if (Term->readsRegister(SrcReg, /*TRI=*/nullptr))
+        if (Term->readsRegister(SrcReg))
           KillInst = Term;
       }
 
@@ -563,7 +563,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
             --KillInst;
             if (KillInst->isDebugInstr())
               continue;
-            if (KillInst->readsRegister(SrcReg, /*TRI=*/nullptr))
+            if (KillInst->readsRegister(SrcReg))
               break;
           }
         } else {
@@ -571,8 +571,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
           KillInst = NewSrcInstr;
         }
       }
-      assert(KillInst->readsRegister(SrcReg, /*TRI=*/nullptr) &&
-             "Cannot find kill instruction");
+      assert(KillInst->readsRegister(SrcReg) && "Cannot find kill instruction");
 
       // Finally, mark it killed.
       LV->addVirtualRegisterKilled(SrcReg, *KillInst);
@@ -608,7 +607,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
           MachineBasicBlock::iterator KillInst = opBlock.end();
           for (MachineBasicBlock::iterator Term = InsertPos;
                Term != opBlock.end(); ++Term) {
-            if (Term->readsRegister(SrcReg, /*TRI=*/nullptr))
+            if (Term->readsRegister(SrcReg))
               KillInst = Term;
           }
 
@@ -622,7 +621,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
                 --KillInst;
                 if (KillInst->isDebugInstr())
                   continue;
-                if (KillInst->readsRegister(SrcReg, /*TRI=*/nullptr))
+                if (KillInst->readsRegister(SrcReg))
                   break;
               }
             } else {
@@ -630,7 +629,7 @@ void PHIElimination::LowerPHINode(MachineBasicBlock &MBB,
               KillInst = std::prev(InsertPos);
             }
           }
-          assert(KillInst->readsRegister(SrcReg, /*TRI=*/nullptr) &&
+          assert(KillInst->readsRegister(SrcReg) &&
                  "Cannot find kill instruction");
 
           SlotIndex LastUseIndex = LIS->getInstructionIndex(*KillInst);

@@ -591,14 +591,6 @@ namespace AArch64BTIHint {
   #include "AArch64GenSystemOperands.inc"
 }
 
-namespace AArch64SME {
-enum ToggleCondition : unsigned {
-  Always,
-  IfCallerIsStreaming,
-  IfCallerIsNonStreaming
-};
-}
-
 namespace AArch64SE {
     enum ShiftExtSpecifiers {
         Invalid = -1,

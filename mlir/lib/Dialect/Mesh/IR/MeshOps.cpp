@@ -169,7 +169,7 @@ ShapedType mesh::shardShapedType(ShapedType shape, MeshOp mesh,
 }
 
 Type mesh::shardType(Type type, MeshOp mesh, MeshShardingAttr sharding) {
-  RankedTensorType rankedTensorType = dyn_cast<RankedTensorType>(type);
+  RankedTensorType rankedTensorType = type.dyn_cast<RankedTensorType>();
   if (rankedTensorType) {
     return shardShapedType(rankedTensorType, mesh, sharding);
   }
@@ -281,8 +281,7 @@ MeshShardingAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 }
 
 bool MeshShardingAttr::operator==(Attribute rhs) const {
-  MeshShardingAttr rhsAsMeshShardingAttr =
-      mlir::dyn_cast<MeshShardingAttr>(rhs);
+  MeshShardingAttr rhsAsMeshShardingAttr = rhs.dyn_cast<MeshShardingAttr>();
   return rhsAsMeshShardingAttr && *this == rhsAsMeshShardingAttr;
 }
 
@@ -485,15 +484,15 @@ static LogicalResult verifyDimensionCompatibility(Location loc,
 static LogicalResult verifyGatherOperandAndResultShape(
     Value operand, Value result, int64_t gatherAxis,
     ArrayRef<MeshAxis> meshAxes, ArrayRef<int64_t> meshShape) {
-  auto resultRank = cast<ShapedType>(result.getType()).getRank();
+  auto resultRank = result.getType().template cast<ShapedType>().getRank();
   if (gatherAxis < 0 || gatherAxis >= resultRank) {
     return emitError(result.getLoc())
            << "Gather axis " << gatherAxis << " is out of bounds [0, "
            << resultRank << ").";
   }
 
-  ShapedType operandType = cast<ShapedType>(operand.getType());
-  ShapedType resultType = cast<ShapedType>(result.getType());
+  ShapedType operandType = operand.getType().cast<ShapedType>();
+  ShapedType resultType = result.getType().cast<ShapedType>();
   auto deviceGroupSize =
       DimensionSize(collectiveProcessGroupSize(meshAxes, meshShape));
   for (int64_t axis = 0; axis < operandType.getRank(); ++axis) {
@@ -512,8 +511,8 @@ static LogicalResult verifyGatherOperandAndResultShape(
 static LogicalResult verifyAllToAllOperandAndResultShape(
     Value operand, Value result, int64_t splitAxis, int64_t concatAxis,
     ArrayRef<MeshAxis> meshAxes, ArrayRef<int64_t> meshShape) {
-  ShapedType operandType = cast<ShapedType>(operand.getType());
-  ShapedType resultType = cast<ShapedType>(result.getType());
+  ShapedType operandType = operand.getType().cast<ShapedType>();
+  ShapedType resultType = result.getType().cast<ShapedType>();
   for (int64_t axis = 0; axis < operandType.getRank(); ++axis) {
     if ((axis != splitAxis && axis != concatAxis) || splitAxis == concatAxis) {
       if (failed(verifyDimensionCompatibility(
@@ -557,8 +556,8 @@ static LogicalResult verifyAllToAllOperandAndResultShape(
 static LogicalResult verifyScatterOrSliceOperandAndResultShape(
     Value operand, Value result, int64_t tensorAxis,
     ArrayRef<MeshAxis> meshAxes, ArrayRef<int64_t> meshShape) {
-  ShapedType operandType = cast<ShapedType>(operand.getType());
-  ShapedType resultType = cast<ShapedType>(result.getType());
+  ShapedType operandType = operand.getType().cast<ShapedType>();
+  ShapedType resultType = result.getType().cast<ShapedType>();
   for (int64_t axis = 0; axis < operandType.getRank(); ++axis) {
     if (axis != tensorAxis) {
       if (failed(verifyDimensionCompatibility(

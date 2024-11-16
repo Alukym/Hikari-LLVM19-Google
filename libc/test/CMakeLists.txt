@@ -18,6 +18,10 @@ add_subdirectory(include)
 add_subdirectory(src)
 add_subdirectory(utils)
 
+if(LLVM_LIBC_FULL_BUILD AND NOT LIBC_TARGET_OS_IS_BAREMETAL)
+  add_subdirectory(IntegrationTest)
+endif()
+
 if(NOT LLVM_LIBC_FULL_BUILD)
   return()
 endif()
@@ -27,6 +31,4 @@ if(NOT ${LIBC_TARGET_OS} STREQUAL "linux" AND
   # Integration tests are currently only available for linux and the GPU.
   return()
 endif()
-
-add_subdirectory(IntegrationTest)
 add_subdirectory(integration)

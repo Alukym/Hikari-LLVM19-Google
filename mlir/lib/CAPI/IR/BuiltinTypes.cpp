@@ -311,11 +311,11 @@ MlirType mlirVectorTypeGetScalableChecked(MlirLocation loc, intptr_t rank,
 }
 
 bool mlirVectorTypeIsScalable(MlirType type) {
-  return cast<VectorType>(unwrap(type)).isScalable();
+  return unwrap(type).cast<VectorType>().isScalable();
 }
 
 bool mlirVectorTypeIsDimScalable(MlirType type, intptr_t dim) {
-  return cast<VectorType>(unwrap(type)).getScalableDims()[dim];
+  return unwrap(type).cast<VectorType>().getScalableDims()[dim];
 }
 
 //===----------------------------------------------------------------------===//

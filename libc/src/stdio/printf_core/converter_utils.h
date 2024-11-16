@@ -18,9 +18,7 @@
 namespace LIBC_NAMESPACE {
 namespace printf_core {
 
-LIBC_INLINE uintmax_t apply_length_modifier(uintmax_t num,
-                                            LengthSpec length_spec) {
-  auto [lm, bw] = length_spec;
+LIBC_INLINE uintmax_t apply_length_modifier(uintmax_t num, LengthModifier lm) {
   switch (lm) {
   case LengthModifier::none:
     return num & cpp::numeric_limits<unsigned int>::max();
@@ -42,18 +40,6 @@ LIBC_INLINE uintmax_t apply_length_modifier(uintmax_t num,
     return num & cpp::numeric_limits<uintptr_t>::max();
   case LengthModifier::j:
     return num; // j is intmax, so no mask is necessary.
-  case LengthModifier::w:
-  case LengthModifier::wf: {
-    uintmax_t mask;
-    if (bw == 0) {
-      mask = 0;
-    } else if (bw < sizeof(uintmax_t) * CHAR_BIT) {
-      mask = (static_cast<uintmax_t>(1) << bw) - 1;
-    } else {
-      mask = UINTMAX_MAX;
-    }
-    return num & mask;
-  }
   }
   __builtin_unreachable();
 }

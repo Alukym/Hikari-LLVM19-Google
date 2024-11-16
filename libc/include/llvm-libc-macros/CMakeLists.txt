@@ -32,12 +32,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
 endif()
 
 add_macro_header(
-  assert_macros
-  HDR
-    assert-macros.h
-)
-
-add_macro_header(
   generic_error_number_macros
   HDR
     generic-error-number-macros.h
@@ -147,12 +141,6 @@ add_macro_header(
   sys_auxv_macros
   HDR
     sys-auxv-macros.h
-)
-
-add_macro_header(
-  sys_epoll_macros
-  HDR
-    sys-epoll-macros.h
 )
 
 add_macro_header(

@@ -299,9 +299,9 @@ public:
   }
 
   /// Set the runpath search paths.
-  /// \param RPath The name of runpath.
   /// \param InputTarget The target applicable to runpath search path.
-  void addRPath(StringRef RPath, const Target &InputTarget);
+  /// \param RPath The name of runpath.
+  void addRPath(const Target &InputTarget, StringRef RPath);
 
   /// Get the list of runpath search paths.
   ///

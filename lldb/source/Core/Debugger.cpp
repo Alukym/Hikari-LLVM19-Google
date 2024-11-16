@@ -823,8 +823,8 @@ TargetSP Debugger::FindTargetWithProcess(Process *process) {
   return target_sp;
 }
 
-llvm::StringRef Debugger::GetStaticBroadcasterClass() {
-  static constexpr llvm::StringLiteral class_name("lldb.debugger");
+ConstString Debugger::GetStaticBroadcasterClass() {
+  static ConstString class_name("lldb.debugger");
   return class_name;
 }
 
@@ -846,7 +846,7 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
       m_loaded_plugins(), m_event_handler_thread(), m_io_handler_thread(),
       m_sync_broadcaster(nullptr, "lldb.debugger.sync"),
       m_broadcaster(m_broadcaster_manager_sp,
-                    GetStaticBroadcasterClass().str()),
+                    GetStaticBroadcasterClass().AsCString()),
       m_forward_listener_sp(), m_clear_once() {
   // Initialize the debugger properties as early as possible as other parts of
   // LLDB will start querying them during construction.
@@ -860,9 +860,6 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
   m_collection_sp->AppendProperty(
       "symbols", "Symbol lookup and cache settings.", true,
       ModuleList::GetGlobalModuleListProperties().GetValueProperties());
-  m_collection_sp->AppendProperty(
-      LanguageProperties::GetSettingName(), "Language settings.", true,
-      Language::GetGlobalLanguageProperties().GetValueProperties());
   if (m_command_interpreter_up) {
     m_collection_sp->AppendProperty(
         "interpreter",
@@ -1115,6 +1112,9 @@ void Debugger::RunIOHandlerSync(const IOHandlerSP &reader_sp) {
   IOHandlerSP top_reader_sp = reader_sp;
 
   while (top_reader_sp) {
+    if (!top_reader_sp)
+      break;
+
     top_reader_sp->Run();
 
     // Don't unwind past the starting point.
@@ -1476,19 +1476,20 @@ void Debugger::ReportProgress(uint64_t progress_id, std::string title,
   }
 }
 
-static void PrivateReportDiagnostic(Debugger &debugger, Severity severity,
+static void PrivateReportDiagnostic(Debugger &debugger,
+                                    DiagnosticEventData::Type type,
                                     std::string message,
                                     bool debugger_specific) {
   uint32_t event_type = 0;
-  switch (severity) {
-  case eSeverityInfo:
-    assert(false && "eSeverityInfo should not be broadcast");
+  switch (type) {
+  case DiagnosticEventData::Type::Info:
+    assert(false && "DiagnosticEventData::Type::Info should not be broadcast");
     return;
-  case eSeverityWarning:
-    event_type = lldb::eBroadcastBitWarning;
+  case DiagnosticEventData::Type::Warning:
+    event_type = Debugger::eBroadcastBitWarning;
     break;
-  case eSeverityError:
-    event_type = lldb::eBroadcastBitError;
+  case DiagnosticEventData::Type::Error:
+    event_type = Debugger::eBroadcastBitError;
     break;
   }
 
@@ -1496,32 +1497,29 @@ static void PrivateReportDiagnostic(Debugger &debugger, Severity severity,
   if (!broadcaster.EventTypeHasListeners(event_type)) {
     // Diagnostics are too important to drop. If nobody is listening, print the
     // diagnostic directly to the debugger's error stream.
-    DiagnosticEventData event_data(severity, std::move(message),
-                                   debugger_specific);
+    DiagnosticEventData event_data(type, std::move(message), debugger_specific);
     StreamSP stream = debugger.GetAsyncErrorStream();
     event_data.Dump(stream.get());
     return;
   }
   EventSP event_sp = std::make_shared<Event>(
       event_type,
-      new DiagnosticEventData(severity, std::move(message), debugger_specific));
+      new DiagnosticEventData(type, std::move(message), debugger_specific));
   broadcaster.BroadcastEvent(event_sp);
 }
 
-void Debugger::ReportDiagnosticImpl(Severity severity, std::string message,
+void Debugger::ReportDiagnosticImpl(DiagnosticEventData::Type type,
+                                    std::string message,
                                     std::optional<lldb::user_id_t> debugger_id,
                                     std::once_flag *once) {
   auto ReportDiagnosticLambda = [&]() {
-    // Always log diagnostics to the system log.
-    Host::SystemLog(severity, message);
-
     // The diagnostic subsystem is optional but we still want to broadcast
     // events when it's disabled.
     if (Diagnostics::Enabled())
       Diagnostics::Instance().Report(message);
 
     // We don't broadcast info events.
-    if (severity == lldb::eSeverityInfo)
+    if (type == DiagnosticEventData::Type::Info)
       return;
 
     // Check if this diagnostic is for a specific debugger.
@@ -1530,8 +1528,7 @@ void Debugger::ReportDiagnosticImpl(Severity severity, std::string message,
       // still exists.
       DebuggerSP debugger_sp = FindDebuggerWithID(*debugger_id);
       if (debugger_sp)
-        PrivateReportDiagnostic(*debugger_sp, severity, std::move(message),
-                                true);
+        PrivateReportDiagnostic(*debugger_sp, type, std::move(message), true);
       return;
     }
     // The diagnostic event is not debugger specific, iterate over all debuggers
@@ -1539,7 +1536,7 @@ void Debugger::ReportDiagnosticImpl(Severity severity, std::string message,
     if (g_debugger_list_ptr && g_debugger_list_mutex_ptr) {
       std::lock_guard<std::recursive_mutex> guard(*g_debugger_list_mutex_ptr);
       for (const auto &debugger : *g_debugger_list_ptr)
-        PrivateReportDiagnostic(*debugger, severity, message, false);
+        PrivateReportDiagnostic(*debugger, type, message, false);
     }
   };
 
@@ -1552,19 +1549,22 @@ void Debugger::ReportDiagnosticImpl(Severity severity, std::string message,
 void Debugger::ReportWarning(std::string message,
                              std::optional<lldb::user_id_t> debugger_id,
                              std::once_flag *once) {
-  ReportDiagnosticImpl(eSeverityWarning, std::move(message), debugger_id, once);
+  ReportDiagnosticImpl(DiagnosticEventData::Type::Warning, std::move(message),
+                       debugger_id, once);
 }
 
 void Debugger::ReportError(std::string message,
                            std::optional<lldb::user_id_t> debugger_id,
                            std::once_flag *once) {
-  ReportDiagnosticImpl(eSeverityError, std::move(message), debugger_id, once);
+  ReportDiagnosticImpl(DiagnosticEventData::Type::Error, std::move(message),
+                       debugger_id, once);
 }
 
 void Debugger::ReportInfo(std::string message,
                           std::optional<lldb::user_id_t> debugger_id,
                           std::once_flag *once) {
-  ReportDiagnosticImpl(eSeverityInfo, std::move(message), debugger_id, once);
+  ReportDiagnosticImpl(DiagnosticEventData::Type::Info, std::move(message),
+                       debugger_id, once);
 }
 
 void Debugger::ReportSymbolChange(const ModuleSpec &module_spec) {
@@ -1572,7 +1572,7 @@ void Debugger::ReportSymbolChange(const ModuleSpec &module_spec) {
     std::lock_guard<std::recursive_mutex> guard(*g_debugger_list_mutex_ptr);
     for (DebuggerSP debugger_sp : *g_debugger_list_ptr) {
       EventSP event_sp = std::make_shared<Event>(
-          lldb::eBroadcastSymbolChange,
+          Debugger::eBroadcastSymbolChange,
           new SymbolChangeEventData(debugger_sp, module_spec));
       debugger_sp->GetBroadcaster().BroadcastEvent(event_sp);
     }
@@ -1879,9 +1879,8 @@ lldb::thread_result_t Debugger::DefaultEventHandler() {
           CommandInterpreter::eBroadcastBitAsynchronousErrorData);
 
   listener_sp->StartListeningForEvents(
-      &m_broadcaster, lldb::eBroadcastBitProgress | lldb::eBroadcastBitWarning |
-                          lldb::eBroadcastBitError |
-                          lldb::eBroadcastSymbolChange);
+      &m_broadcaster, eBroadcastBitProgress | eBroadcastBitWarning |
+                          eBroadcastBitError | eBroadcastSymbolChange);
 
   // Let the thread that spawned us know that we have started up and that we
   // are now listening to all required events so no events get missed
@@ -1933,11 +1932,11 @@ lldb::thread_result_t Debugger::DefaultEventHandler() {
               }
             }
           } else if (broadcaster == &m_broadcaster) {
-            if (event_type & lldb::eBroadcastBitProgress)
+            if (event_type & Debugger::eBroadcastBitProgress)
               HandleProgressEvent(event_sp);
-            else if (event_type & lldb::eBroadcastBitWarning)
+            else if (event_type & Debugger::eBroadcastBitWarning)
               HandleDiagnosticEvent(event_sp);
-            else if (event_type & lldb::eBroadcastBitError)
+            else if (event_type & Debugger::eBroadcastBitError)
               HandleDiagnosticEvent(event_sp);
           }
         }

@@ -23,20 +23,20 @@ namespace llvm {
 namespace dxil {
 
 enum class ParameterKind : uint8_t {
-  Invalid = 0,
-  Void,
-  Half,
-  Float,
-  Double,
+  INVALID = 0,
+  VOID,
+  HALF,
+  FLOAT,
+  DOUBLE,
   I1,
   I8,
   I16,
   I32,
   I64,
-  Overload,
-  CBufferRet,
-  ResourceRet,
-  DXILHandle,
+  OVERLOAD,
+  CBUFFER_RET,
+  RESOURCE_RET,
+  DXIL_HANDLE,
 };
 
 /// The kind of resource for an SRV or UAV resource. Sometimes referred to as

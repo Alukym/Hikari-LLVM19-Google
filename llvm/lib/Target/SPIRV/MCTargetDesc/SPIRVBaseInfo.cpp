@@ -88,28 +88,28 @@ getSymbolicOperandMnemonic(SPIRV::OperandCategory::OperandCategory Category,
   return Name;
 }
 
-VersionTuple
+uint32_t
 getSymbolicOperandMinVersion(SPIRV::OperandCategory::OperandCategory Category,
                              uint32_t Value) {
   const SPIRV::SymbolicOperand *Lookup =
       SPIRV::lookupSymbolicOperandByCategoryAndValue(Category, Value);
 
   if (Lookup)
-    return VersionTuple(Lookup->MinVersion / 10, Lookup->MinVersion % 10);
+    return Lookup->MinVersion;
 
-  return VersionTuple(0);
+  return 0;
 }
 
-VersionTuple
+uint32_t
 getSymbolicOperandMaxVersion(SPIRV::OperandCategory::OperandCategory Category,
                              uint32_t Value) {
   const SPIRV::SymbolicOperand *Lookup =
       SPIRV::lookupSymbolicOperandByCategoryAndValue(Category, Value);
 
   if (Lookup)
-    return VersionTuple(Lookup->MaxVersion / 10, Lookup->MaxVersion % 10);
+    return Lookup->MaxVersion;
 
-  return VersionTuple();
+  return 0;
 }
 
 CapabilityList

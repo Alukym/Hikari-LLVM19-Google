@@ -75,14 +75,14 @@ GenericConvergenceVerifier<SSAContext>::findAndCheckConvergenceTokenUsed(
 
 template <>
 bool GenericConvergenceVerifier<SSAContext>::isInsideConvergentFunction(
-    const Instruction &I) {
+    const InstructionT &I) {
   auto *F = I.getFunction();
   return F->isConvergent();
 }
 
 template <>
 bool GenericConvergenceVerifier<SSAContext>::isConvergent(
-    const Instruction &I) {
+    const InstructionT &I) {
   if (auto *CB = dyn_cast<CallBase>(&I)) {
     return CB->isConvergent();
   }

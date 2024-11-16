@@ -17,6 +17,7 @@
 #include <__type_traits/is_signed.h>
 #include <__type_traits/is_void.h>
 #include <__type_traits/remove_cv.h>
+#include <__type_traits/remove_cvref.h>
 #include <__type_traits/void_t.h>
 #include <__utility/declval.h>
 

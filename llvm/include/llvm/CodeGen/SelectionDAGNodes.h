@@ -558,7 +558,6 @@ BEGIN_TWO_BYTE_PACK()
 
   class LoadSDNodeBitfields {
     friend class LoadSDNode;
-    friend class AtomicSDNode;
     friend class VPLoadSDNode;
     friend class VPStridedLoadSDNode;
     friend class MaskedLoadSDNode;
@@ -999,13 +998,6 @@ public:
   /// If Flags is not in a defined state then this has no effect.
   void intersectFlagsWith(const SDNodeFlags Flags);
 
-  bool hasPoisonGeneratingFlags() const {
-    SDNodeFlags Flags = getFlags();
-    return Flags.hasNoUnsignedWrap() || Flags.hasNoSignedWrap() ||
-           Flags.hasExact() || Flags.hasDisjoint() || Flags.hasNonNeg() ||
-           Flags.hasNoNaNs() || Flags.hasNoInfs();
-  }
-
   void setCFIType(uint32_t Type) { CFIType = Type; }
   uint32_t getCFIType() const { return CFIType; }
 
@@ -1290,10 +1282,8 @@ private:
   unsigned DestAddrSpace;
 
 public:
-  AddrSpaceCastSDNode(unsigned Order, const DebugLoc &dl, SDVTList VTs,
-                      unsigned SrcAS, unsigned DestAS)
-      : SDNode(ISD::ADDRSPACECAST, Order, dl, VTs), SrcAddrSpace(SrcAS),
-        DestAddrSpace(DestAS) {}
+  AddrSpaceCastSDNode(unsigned Order, const DebugLoc &dl, EVT VT,
+                      unsigned SrcAS, unsigned DestAS);
 
   unsigned getSrcAddressSpace() const { return SrcAddrSpace; }
   unsigned getDestAddressSpace() const { return DestAddrSpace; }
@@ -1485,16 +1475,6 @@ public:
             MMO->isAtomic()) && "then why are we using an AtomicSDNode?");
   }
 
-  void setExtensionType(ISD::LoadExtType ETy) {
-    assert(getOpcode() == ISD::ATOMIC_LOAD && "Only used for atomic loads.");
-    LoadSDNodeBits.ExtTy = ETy;
-  }
-
-  ISD::LoadExtType getExtensionType() const {
-    assert(getOpcode() == ISD::ATOMIC_LOAD && "Only used for atomic loads.");
-    return static_cast<ISD::LoadExtType>(LoadSDNodeBits.ExtTy);
-  }
-
   const SDValue &getBasePtr() const {
     return getOpcode() == ISD::ATOMIC_STORE ? getOperand(2) : getOperand(1);
   }
@@ -1582,9 +1562,8 @@ class ShuffleVectorSDNode : public SDNode {
 protected:
   friend class SelectionDAG;
 
-  ShuffleVectorSDNode(SDVTList VTs, unsigned Order, const DebugLoc &dl,
-                      const int *M)
-      : SDNode(ISD::VECTOR_SHUFFLE, Order, dl, VTs), Mask(M) {}
+  ShuffleVectorSDNode(EVT VT, unsigned Order, const DebugLoc &dl, const int *M)
+      : SDNode(ISD::VECTOR_SHUFFLE, Order, dl, getSDVTList(VT)), Mask(M) {}
 
 public:
   ArrayRef<int> getMask() const {
@@ -1638,10 +1617,9 @@ class ConstantSDNode : public SDNode {
 
   const ConstantInt *Value;
 
-  ConstantSDNode(bool isTarget, bool isOpaque, const ConstantInt *val,
-                 SDVTList VTs)
+  ConstantSDNode(bool isTarget, bool isOpaque, const ConstantInt *val, EVT VT)
       : SDNode(isTarget ? ISD::TargetConstant : ISD::Constant, 0, DebugLoc(),
-               VTs),
+               getSDVTList(VT)),
         Value(val) {
     ConstantSDNodeBits.IsOpaque = isOpaque;
   }
@@ -1692,9 +1670,9 @@ class ConstantFPSDNode : public SDNode {
 
   const ConstantFP *Value;
 
-  ConstantFPSDNode(bool isTarget, const ConstantFP *val, SDVTList VTs)
+  ConstantFPSDNode(bool isTarget, const ConstantFP *val, EVT VT)
       : SDNode(isTarget ? ISD::TargetConstantFP : ISD::ConstantFP, 0,
-               DebugLoc(), VTs),
+               DebugLoc(), getSDVTList(VT)),
         Value(val) {}
 
 public:
@@ -1827,10 +1805,8 @@ class GlobalAddressSDNode : public SDNode {
   unsigned TargetFlags;
 
   GlobalAddressSDNode(unsigned Opc, unsigned Order, const DebugLoc &DL,
-                      const GlobalValue *GA, SDVTList VTs, int64_t o,
-                      unsigned TF)
-      : SDNode(Opc, Order, DL, VTs), TheGlobal(GA), Offset(o), TargetFlags(TF) {
-  }
+                      const GlobalValue *GA, EVT VT, int64_t o,
+                      unsigned TF);
 
 public:
   const GlobalValue *getGlobal() const { return TheGlobal; }
@@ -1852,10 +1828,10 @@ class FrameIndexSDNode : public SDNode {
 
   int FI;
 
-  FrameIndexSDNode(int fi, SDVTList VTs, bool isTarg)
-      : SDNode(isTarg ? ISD::TargetFrameIndex : ISD::FrameIndex, 0, DebugLoc(),
-               VTs),
-        FI(fi) {}
+  FrameIndexSDNode(int fi, EVT VT, bool isTarg)
+    : SDNode(isTarg ? ISD::TargetFrameIndex : ISD::FrameIndex,
+      0, DebugLoc(), getSDVTList(VT)), FI(fi) {
+  }
 
 public:
   int getIndex() const { return FI; }
@@ -1930,10 +1906,10 @@ class JumpTableSDNode : public SDNode {
   int JTI;
   unsigned TargetFlags;
 
-  JumpTableSDNode(int jti, SDVTList VTs, bool isTarg, unsigned TF)
-      : SDNode(isTarg ? ISD::TargetJumpTable : ISD::JumpTable, 0, DebugLoc(),
-               VTs),
-        JTI(jti), TargetFlags(TF) {}
+  JumpTableSDNode(int jti, EVT VT, bool isTarg, unsigned TF)
+    : SDNode(isTarg ? ISD::TargetJumpTable : ISD::JumpTable,
+      0, DebugLoc(), getSDVTList(VT)), JTI(jti), TargetFlags(TF) {
+  }
 
 public:
   int getIndex() const { return JTI; }
@@ -1956,19 +1932,19 @@ class ConstantPoolSDNode : public SDNode {
   Align Alignment; // Minimum alignment requirement of CP.
   unsigned TargetFlags;
 
-  ConstantPoolSDNode(bool isTarget, const Constant *c, SDVTList VTs, int o,
+  ConstantPoolSDNode(bool isTarget, const Constant *c, EVT VT, int o,
                      Align Alignment, unsigned TF)
       : SDNode(isTarget ? ISD::TargetConstantPool : ISD::ConstantPool, 0,
-               DebugLoc(), VTs),
+               DebugLoc(), getSDVTList(VT)),
         Offset(o), Alignment(Alignment), TargetFlags(TF) {
     assert(Offset >= 0 && "Offset is too large");
     Val.ConstVal = c;
   }
 
-  ConstantPoolSDNode(bool isTarget, MachineConstantPoolValue *v, SDVTList VTs,
-                     int o, Align Alignment, unsigned TF)
+  ConstantPoolSDNode(bool isTarget, MachineConstantPoolValue *v, EVT VT, int o,
+                     Align Alignment, unsigned TF)
       : SDNode(isTarget ? ISD::TargetConstantPool : ISD::ConstantPool, 0,
-               DebugLoc(), VTs),
+               DebugLoc(), getSDVTList(VT)),
         Offset(o), Alignment(Alignment), TargetFlags(TF) {
     assert(Offset >= 0 && "Offset is too large");
     Val.MachineCPVal = v;
@@ -2016,9 +1992,9 @@ class TargetIndexSDNode : public SDNode {
   int64_t Offset;
 
 public:
-  TargetIndexSDNode(int Idx, SDVTList VTs, int64_t Ofs, unsigned TF)
-      : SDNode(ISD::TargetIndex, 0, DebugLoc(), VTs), TargetFlags(TF),
-        Index(Idx), Offset(Ofs) {}
+  TargetIndexSDNode(int Idx, EVT VT, int64_t Ofs, unsigned TF)
+      : SDNode(ISD::TargetIndex, 0, DebugLoc(), getSDVTList(VT)),
+        TargetFlags(TF), Index(Idx), Offset(Ofs) {}
 
   unsigned getTargetFlags() const { return TargetFlags; }
   int getIndex() const { return Index; }
@@ -2228,8 +2204,8 @@ class RegisterSDNode : public SDNode {
 
   Register Reg;
 
-  RegisterSDNode(Register reg, SDVTList VTs)
-      : SDNode(ISD::Register, 0, DebugLoc(), VTs), Reg(reg) {}
+  RegisterSDNode(Register reg, EVT VT)
+    : SDNode(ISD::Register, 0, DebugLoc(), getSDVTList(VT)), Reg(reg) {}
 
 public:
   Register getReg() const { return Reg; }
@@ -2264,10 +2240,10 @@ class BlockAddressSDNode : public SDNode {
   int64_t Offset;
   unsigned TargetFlags;
 
-  BlockAddressSDNode(unsigned NodeTy, SDVTList VTs, const BlockAddress *ba,
+  BlockAddressSDNode(unsigned NodeTy, EVT VT, const BlockAddress *ba,
                      int64_t o, unsigned Flags)
-      : SDNode(NodeTy, 0, DebugLoc(), VTs), BA(ba), Offset(o),
-        TargetFlags(Flags) {}
+    : SDNode(NodeTy, 0, DebugLoc(), getSDVTList(VT)),
+             BA(ba), Offset(o), TargetFlags(Flags) {}
 
 public:
   const BlockAddress *getBlockAddress() const { return BA; }
@@ -2305,10 +2281,9 @@ class ExternalSymbolSDNode : public SDNode {
   const char *Symbol;
   unsigned TargetFlags;
 
-  ExternalSymbolSDNode(bool isTarget, const char *Sym, unsigned TF,
-                       SDVTList VTs)
+  ExternalSymbolSDNode(bool isTarget, const char *Sym, unsigned TF, EVT VT)
       : SDNode(isTarget ? ISD::TargetExternalSymbol : ISD::ExternalSymbol, 0,
-               DebugLoc(), VTs),
+               DebugLoc(), getSDVTList(VT)),
         Symbol(Sym), TargetFlags(TF) {}
 
 public:
@@ -2326,8 +2301,8 @@ class MCSymbolSDNode : public SDNode {
 
   MCSymbol *Symbol;
 
-  MCSymbolSDNode(MCSymbol *Symbol, SDVTList VTs)
-      : SDNode(ISD::MCSymbol, 0, DebugLoc(), VTs), Symbol(Symbol) {}
+  MCSymbolSDNode(MCSymbol *Symbol, EVT VT)
+      : SDNode(ISD::MCSymbol, 0, DebugLoc(), getSDVTList(VT)), Symbol(Symbol) {}
 
 public:
   MCSymbol *getMCSymbol() const { return Symbol; }
@@ -3040,8 +3015,8 @@ class AssertAlignSDNode : public SDNode {
   Align Alignment;
 
 public:
-  AssertAlignSDNode(unsigned Order, const DebugLoc &DL, SDVTList VTs, Align A)
-      : SDNode(ISD::AssertAlign, Order, DL, VTs), Alignment(A) {}
+  AssertAlignSDNode(unsigned Order, const DebugLoc &DL, EVT VT, Align A)
+      : SDNode(ISD::AssertAlign, Order, DL, getSDVTList(VT)), Alignment(A) {}
 
   Align getAlign() const { return Alignment; }
 

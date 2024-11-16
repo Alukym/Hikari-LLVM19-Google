@@ -487,9 +487,6 @@ public:
       const auto namePair{
           currScope().try_emplace(name->source, Attrs{}, ProcEntityDetails{})};
       auto &newSymbol{*namePair.first->second};
-      if (context_.intrinsics().IsIntrinsic(name->ToString())) {
-        newSymbol.attrs().set(Attr::INTRINSIC);
-      }
       name->symbol = &newSymbol;
     };
     if (const auto *procD{parser::Unwrap<parser::ProcedureDesignator>(opr.u)}) {
@@ -633,8 +630,6 @@ public:
               [&](const auto &name) {},
           },
           ompObj.u);
-
-      ResolveOmpObject(ompObj, ompFlag);
     }
   }
 
@@ -1651,15 +1646,6 @@ void OmpAttributeVisitor::ResolveSeqLoopIndexInParallelOrTaskConstruct(
       break;
     }
   }
-  // If this symbol already has a data-sharing attribute then there is nothing
-  // to do here.
-  if (const Symbol * symbol{iv.symbol}) {
-    for (auto symMap : targetIt->objectWithDSA) {
-      if (symMap.first->name() == symbol->name()) {
-        return;
-      }
-    }
-  }
   // If this symbol is already Private or Firstprivate in the enclosing
   // OpenMP parallel or task then there is nothing to do here.
   if (auto *symbol{targetIt->scope.FindSymbol(iv.source)}) {
@@ -1813,7 +1799,6 @@ bool OmpAttributeVisitor::Pre(const parser::OpenMPSectionsConstruct &x) {
   case llvm::omp::Directive::OMPD_parallel_sections:
   case llvm::omp::Directive::OMPD_sections:
     PushContext(beginDir.source, beginDir.v);
-    GetContext().withinConstruct = true;
     break;
   default:
     break;
@@ -1826,7 +1811,6 @@ bool OmpAttributeVisitor::Pre(const parser::OpenMPCriticalConstruct &x) {
   const auto &beginCriticalDir{std::get<parser::OmpCriticalDirective>(x.t)};
   const auto &endCriticalDir{std::get<parser::OmpEndCriticalDirective>(x.t)};
   PushContext(beginCriticalDir.source, llvm::omp::Directive::OMPD_critical);
-  GetContext().withinConstruct = true;
   if (const auto &criticalName{
           std::get<std::optional<parser::Name>>(beginCriticalDir.t)}) {
     ResolveOmpName(*criticalName, Symbol::Flag::OmpCriticalLock);
@@ -2025,113 +2009,34 @@ void OmpAttributeVisitor::Post(const parser::Name &name) {
         }
       }
     }
-
-    if (Symbol * found{currScope().FindSymbol(name.source)}) {
-      if (found->test(semantics::Symbol::Flag::OmpThreadprivate))
-        return;
-    }
-
-    // Implicitly determined DSAs
-    // OMP 5.2 5.1.1 - Variables Referenced in a Construct
-    Symbol *lastDeclSymbol = nullptr;
-    std::optional<Symbol::Flag> prevDSA;
+    std::vector<Symbol *> defaultDSASymbols;
     for (int dirDepth{0}; dirDepth < (int)dirContext_.size(); ++dirDepth) {
       DirContext &dirContext = dirContext_[dirDepth];
-      std::optional<Symbol::Flag> dsa;
-
+      bool hasDataSharingAttr{false};
       for (auto symMap : dirContext.objectWithDSA) {
         // if the `symbol` already has a data-sharing attribute
         if (symMap.first->name() == name.symbol->name()) {
-          dsa = symMap.second;
+          hasDataSharingAttr = true;
           break;
         }
       }
-
-      // When handling each implicit rule, either a new private symbol is
-      // declared or the last declared symbol is used.
-      // In the latter case, it's necessary to insert a new symbol in the scope
-      // being processed, associated with the last declared symbol.
-      // This captures the fact that, although we are using the last declared
-      // symbol, its DSA could be different in this scope.
-      // Also, because of how symbols are collected in lowering, not inserting
-      // a new symbol in this scope could lead to the conclusion that the
-      // symbol was declared in this construct, which would result in wrong
-      // privatization code being generated.
-      // Consider the following example:
-      //
-      // !$omp parallel default(private)              ! p1
-      //   !$omp parallel default(private) shared(x)  ! p2
-      //     x = 10
-      //   !$omp end parallel
-      // !$omp end parallel
-      //
-      // If a new x symbol was not inserted in the inner parallel construct
-      // (p2), it would use the x symbol definition from the enclosing scope.
-      // Then, when p2's default symbols were collected in lowering, the x
-      // symbol from the outer parallel construct (p1) would be collected, as
-      // it would have the private flag set (note that symbols that don't have
-      // any private flag are considered as shared).
-      // This would make x appear to be defined in p2, causing it to be
-      // privatized in p2 and its privatization in p1 to be skipped.
-      auto declNewSymbol = [&](Symbol::Flag flag) {
-        Symbol *hostSymbol =
-            lastDeclSymbol ? lastDeclSymbol : &symbol->GetUltimate();
-        lastDeclSymbol = DeclarePrivateAccessEntity(
-            *hostSymbol, flag, context_.FindScope(dirContext.directiveSource));
-        return lastDeclSymbol;
-      };
-      auto useLastDeclSymbol = [&]() {
-        if (lastDeclSymbol)
-          MakeAssocSymbol(symbol->name(), *lastDeclSymbol,
+      if (hasDataSharingAttr) {
+        if (defaultDSASymbols.size())
+          symbol = &MakeAssocSymbol(symbol->name(), *defaultDSASymbols.back(),
               context_.FindScope(dirContext.directiveSource));
-      };
-
-      if (dsa.has_value()) {
-        useLastDeclSymbol();
-        prevDSA = dsa;
         continue;
       }
 
-      bool taskGenDir = llvm::omp::taskGeneratingSet.test(dirContext.directive);
-      bool targetDir = llvm::omp::allTargetSet.test(dirContext.directive);
-      bool parallelDir = llvm::omp::allParallelSet.test(dirContext.directive);
-
-      if (dirContext.defaultDSA == Symbol::Flag::OmpPrivate ||
-          dirContext.defaultDSA == Symbol::Flag::OmpFirstPrivate ||
-          dirContext.defaultDSA == Symbol::Flag::OmpShared) {
-        // 1) default
-        // Allowed only with parallel, teams and task generating constructs.
-        assert(parallelDir || taskGenDir ||
-            llvm::omp::allTeamsSet.test(dirContext.directive));
-        if (dirContext.defaultDSA != Symbol::Flag::OmpShared)
-          declNewSymbol(dirContext.defaultDSA);
-        else
-          useLastDeclSymbol();
-        dsa = dirContext.defaultDSA;
-      } else if (parallelDir) {
-        // 2) parallel -> shared
-        useLastDeclSymbol();
-        dsa = Symbol::Flag::OmpShared;
-      } else if (!taskGenDir && !targetDir) {
-        // 3) enclosing context
-        useLastDeclSymbol();
-        dsa = prevDSA;
-      } else if (targetDir) {
-        // TODO 4) not mapped target variable -> firstprivate
-        dsa = prevDSA;
-      } else if (taskGenDir) {
-        // TODO 5) dummy arg in orphaned taskgen construct -> firstprivate
-        if (prevDSA == Symbol::Flag::OmpShared) {
-          // 6) shared in enclosing context -> shared
-          useLastDeclSymbol();
-          dsa = Symbol::Flag::OmpShared;
-        } else {
-          // 7) firstprivate
-          dsa = Symbol::Flag::OmpFirstPrivate;
-          declNewSymbol(*dsa)->set(Symbol::Flag::OmpImplicit);
-        }
-      }
-      prevDSA = dsa;
+      if (dirContext.defaultDSA == semantics::Symbol::Flag::OmpPrivate ||
+          dirContext.defaultDSA == semantics::Symbol::Flag::OmpFirstPrivate) {
+        Symbol *hostSymbol = defaultDSASymbols.size() ? defaultDSASymbols.back()
+                                                      : &symbol->GetUltimate();
+        defaultDSASymbols.push_back(
+            DeclarePrivateAccessEntity(*hostSymbol, dirContext.defaultDSA,
+                context_.FindScope(dirContext.directiveSource)));
+      } else if (defaultDSASymbols.size())
+        symbol = &MakeAssocSymbol(symbol->name(), *defaultDSASymbols.back(),
+            context_.FindScope(dirContext.directiveSource));
     }
   } // within OpenMP construct
 }
@@ -2174,10 +2079,15 @@ Symbol *OmpAttributeVisitor::ResolveOmpCommonBlockName(
   if (!name) {
     return nullptr;
   }
-  if (auto *cb{GetProgramUnitOrBlockConstructContaining(GetContext().scope)
-                   .FindCommonBlock(name->source)}) {
-    name->symbol = cb;
-    return cb;
+  // First check if the Common Block is declared in the current scope
+  if (auto *cur{GetContext().scope.FindCommonBlock(name->source)}) {
+    name->symbol = cur;
+    return cur;
+  }
+  // Then check parent scope
+  if (auto *prev{GetContext().scope.parent().FindCommonBlock(name->source)}) {
+    name->symbol = prev;
+    return prev;
   }
   return nullptr;
 }

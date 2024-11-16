@@ -51,7 +51,6 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
-#include "llvm/IR/MemoryModelRelaxationAnnotations.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NoFolder.h"
@@ -1066,8 +1065,11 @@ static int ConstantIntSortPredicate(ConstantInt *const *P1,
 static void GetBranchWeights(Instruction *TI,
                              SmallVectorImpl<uint64_t> &Weights) {
   MDNode *MD = TI->getMetadata(LLVMContext::MD_prof);
-  assert(MD && "Invalid branch-weight metadata");
-  extractFromBranchWeightMD64(MD, Weights);
+  assert(MD);
+  for (unsigned i = 1, e = MD->getNumOperands(); i < e; ++i) {
+    ConstantInt *CI = mdconst::extract<ConstantInt>(MD->getOperand(i));
+    Weights.push_back(CI->getValue().getZExtValue());
+  }
 
   // If TI is a conditional eq, the default case is the false case,
   // and the corresponding branch-weight data is at index 2. We swap the
@@ -1124,8 +1126,8 @@ static void CloneInstructionsIntoPredecessorBlockAndUpdateSSAUses(
 
     NewBonusInst->insertInto(PredBlock, PTI->getIterator());
     auto Range = NewBonusInst->cloneDebugInfoFrom(&BonusInst);
-    RemapDbgRecordRange(NewBonusInst->getModule(), Range, VMap,
-                        RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+    RemapDPValueRange(NewBonusInst->getModule(), Range, VMap,
+                      RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
 
     if (isa<DbgInfoIntrinsic>(BonusInst))
       continue;
@@ -1524,15 +1526,15 @@ static bool shouldHoistCommonInstructions(Instruction *I1, Instruction *I2,
   return true;
 }
 
-/// Hoists DbgVariableRecords from \p I1 and \p OtherInstrs that are identical
-/// in lock-step to \p TI. This matches how dbg.* intrinsics are hoisting in
+/// Hoists DPValues from \p I1 and \p OtherInstrs that are identical in
+/// lock-step to \p TI. This matches how dbg.* intrinsics are hoisting in
 /// hoistCommonCodeFromSuccessors. e.g. The input:
-///    I1                DVRs: { x, z },
-///    OtherInsts: { I2  DVRs: { x, y, z } }
-/// would result in hoisting only DbgVariableRecord x.
-static void hoistLockstepIdenticalDbgVariableRecords(
-    Instruction *TI, Instruction *I1,
-    SmallVectorImpl<Instruction *> &OtherInsts) {
+///    I1                DPVs: { x, z },
+///    OtherInsts: { I2  DPVs: { x, y, z } }
+/// would result in hoisting only DPValue x.
+static void
+hoistLockstepIdenticalDPValues(Instruction *TI, Instruction *I1,
+                               SmallVectorImpl<Instruction *> &OtherInsts) {
   if (!I1->hasDbgRecords())
     return;
   using CurrentAndEndIt =
@@ -1568,12 +1570,12 @@ static void hoistLockstepIdenticalDbgVariableRecords(
   // This replicates the dbg.* intrinsic behaviour in
   // hoistCommonCodeFromSuccessors.
   while (none_of(Itrs, atEnd)) {
-    bool HoistDVRs = allIdentical(Itrs);
+    bool HoistDPVs = allIdentical(Itrs);
     for (CurrentAndEndIt &Pair : Itrs) {
       // Increment Current iterator now as we may be about to move the
       // DbgRecord.
       DbgRecord &DR = *Pair.first++;
-      if (HoistDVRs) {
+      if (HoistDPVs) {
         DR.removeFromParent();
         TI->getParent()->insertDbgRecordBefore(&DR, TI->getIterator());
       }
@@ -1674,8 +1676,7 @@ bool SimplifyCFGOpt::hoistCommonCodeFromSuccessors(BasicBlock *BB,
     for (auto &SuccIter : OtherSuccIterRange) {
       Instruction *I2 = &*SuccIter;
       HasTerminator |= I2->isTerminator();
-      if (AllInstsAreIdentical && (!I1->isIdenticalToWhenDefined(I2) ||
-                                   MMRAMetadata(*I1) != MMRAMetadata(*I2)))
+      if (AllInstsAreIdentical && !I1->isIdenticalToWhenDefined(I2))
         AllInstsAreIdentical = false;
     }
 
@@ -1690,7 +1691,7 @@ bool SimplifyCFGOpt::hoistCommonCodeFromSuccessors(BasicBlock *BB,
       // at the beginning of the loop, we can hoist the terminator instruction.
       // If any instructions remain in the block, we cannot hoist terminators.
       if (NumSkipped || !AllInstsAreIdentical) {
-        hoistLockstepIdenticalDbgVariableRecords(TI, I1, OtherInsts);
+        hoistLockstepIdenticalDPValues(TI, I1, OtherInsts);
         return Changed;
       }
 
@@ -1720,9 +1721,9 @@ bool SimplifyCFGOpt::hoistCommonCodeFromSuccessors(BasicBlock *BB,
         // The debug location is an integral part of a debug info intrinsic
         // and can't be separated from it or replaced.  Instead of attempting
         // to merge locations, simply hoist both copies of the intrinsic.
-        hoistLockstepIdenticalDbgVariableRecords(TI, I1, OtherInsts);
-        // We've just hoisted DbgVariableRecords; move I1 after them (before TI)
-        // and leave any that were not hoisted behind (by calling moveBefore
+        hoistLockstepIdenticalDPValues(TI, I1, OtherInsts);
+        // We've just hoisted DPValues; move I1 after them (before TI) and
+        // leave any that were not hoisted behind (by calling moveBefore
         // rather than moveBeforePreserving).
         I1->moveBefore(TI);
         for (auto &SuccIter : OtherSuccIterRange) {
@@ -1734,9 +1735,9 @@ bool SimplifyCFGOpt::hoistCommonCodeFromSuccessors(BasicBlock *BB,
         // For a normal instruction, we just move one to right before the
         // branch, then replace all uses of the other with the first.  Finally,
         // we remove the now redundant second instruction.
-        hoistLockstepIdenticalDbgVariableRecords(TI, I1, OtherInsts);
-        // We've just hoisted DbgVariableRecords; move I1 after them (before TI)
-        // and leave any that were not hoisted behind (by calling moveBefore
+        hoistLockstepIdenticalDPValues(TI, I1, OtherInsts);
+        // We've just hoisted DPValues; move I1 after them (before TI) and
+        // leave any that were not hoisted behind (by calling moveBefore
         // rather than moveBeforePreserving).
         I1->moveBefore(TI);
         for (auto &SuccIter : OtherSuccIterRange) {
@@ -1758,7 +1759,7 @@ bool SimplifyCFGOpt::hoistCommonCodeFromSuccessors(BasicBlock *BB,
       NumHoistCommonInstrs += SuccIterPairs.size();
     } else {
       if (NumSkipped >= HoistCommonSkipLimit) {
-        hoistLockstepIdenticalDbgVariableRecords(TI, I1, OtherInsts);
+        hoistLockstepIdenticalDPValues(TI, I1, OtherInsts);
         return Changed;
       }
       // We are about to skip over a pair of non-identical instructions. Record
@@ -1821,9 +1822,9 @@ bool SimplifyCFGOpt::hoistSuccIdenticalTerminatorToSwitchOrIf(
     }
   }
 
-  // Hoist DbgVariableRecords attached to the terminator to match dbg.*
-  // intrinsic hoisting behaviour in hoistCommonCodeFromSuccessors.
-  hoistLockstepIdenticalDbgVariableRecords(TI, I1, OtherSuccTIs);
+  // Hoist DPValues attached to the terminator to match dbg.* intrinsic hoisting
+  // behaviour in hoistCommonCodeFromSuccessors.
+  hoistLockstepIdenticalDPValues(TI, I1, OtherSuccTIs);
   // Clone the terminator and hoist it into the pred, without any debug info.
   Instruction *NT = I1->clone();
   NT->insertInto(TIParent, TI->getIterator());
@@ -1962,7 +1963,6 @@ static bool canSinkInstructions(
   }
 
   const Instruction *I0 = Insts.front();
-  const auto I0MMRA = MMRAMetadata(*I0);
   for (auto *I : Insts) {
     if (!I->isSameOperationAs(I0))
       return false;
@@ -1973,11 +1973,6 @@ static bool canSinkInstructions(
     if (isa<StoreInst>(I) && I->getOperand(1)->isSwiftError())
       return false;
     if (isa<LoadInst>(I) && I->getOperand(0)->isSwiftError())
-      return false;
-
-    // Treat MMRAs conservatively. This pass can be quite aggressive and
-    // could drop a lot of MMRAs otherwise.
-    if (MMRAMetadata(*I) != I0MMRA)
       return false;
   }
 
@@ -2892,8 +2887,7 @@ static Value *isSafeToSpeculateStore(Instruction *I, BasicBlock *BrBB,
       // simple, to avoid introducing a spurious non-atomic write after an
       // atomic write.
       if (SI->getPointerOperand() == StorePtr &&
-          SI->getValueOperand()->getType() == StoreTy && SI->isSimple() &&
-          SI->getAlign() >= StoreToHoist->getAlign())
+          SI->getValueOperand()->getType() == StoreTy && SI->isSimple())
         // Found the previous store, return its value operand.
         return SI->getValueOperand();
       return nullptr; // Unknown store.
@@ -2901,7 +2895,7 @@ static Value *isSafeToSpeculateStore(Instruction *I, BasicBlock *BrBB,
 
     if (auto *LI = dyn_cast<LoadInst>(&CurI)) {
       if (LI->getPointerOperand() == StorePtr && LI->getType() == StoreTy &&
-          LI->isSimple() && LI->getAlign() >= StoreToHoist->getAlign()) {
+          LI->isSimple()) {
         // Local objects (created by an `alloca` instruction) are always
         // writable, so once we are past a read from a location it is valid to
         // also write to that same location.
@@ -3185,7 +3179,7 @@ bool SimplifyCFGOpt::SpeculativelyExecuteBB(BranchInst *BI,
         DbgAssign->replaceVariableLocationOp(OrigV, S);
     };
     for_each(at::getAssignmentMarkers(SpeculatedStore), replaceVariable);
-    for_each(at::getDVRAssignmentMarkers(SpeculatedStore), replaceVariable);
+    for_each(at::getDPVAssignmentMarkers(SpeculatedStore), replaceVariable);
   }
 
   // Metadata can be dependent on the condition we are hoisting above.
@@ -3210,15 +3204,13 @@ bool SimplifyCFGOpt::SpeculativelyExecuteBB(BranchInst *BI,
   }
 
   // Hoist the instructions.
-  // In "RemoveDIs" non-instr debug-info mode, drop DbgVariableRecords attached
-  // to these instructions, in the same way that dbg.value intrinsics are
-  // dropped at the end of this block.
+  // In "RemoveDIs" non-instr debug-info mode, drop DPValues attached to these
+  // instructions, in the same way that dbg.value intrinsics are dropped at the
+  // end of this block.
   for (auto &It : make_range(ThenBB->begin(), ThenBB->end()))
     for (DbgRecord &DR : make_early_inc_range(It.getDbgRecordRange()))
-      // Drop all records except assign-kind DbgVariableRecords (dbg.assign
-      // equivalent).
-      if (DbgVariableRecord *DVR = dyn_cast<DbgVariableRecord>(&DR);
-          !DVR || !DVR->isDbgAssign())
+      // Drop all records except assign-kind DPValues (dbg.assign equivalent).
+      if (DPValue *DPV = dyn_cast<DPValue>(&DR); !DPV || !DPV->isDbgAssign())
         It.dropOneDbgRecord(&DR);
   BB->splice(BI->getIterator(), ThenBB, ThenBB->begin(),
              std::prev(ThenBB->end()));
@@ -3393,7 +3385,7 @@ FoldCondBranchOnValueKnownInPredecessorImpl(BranchInst *BI, DomTreeUpdater *DTU,
     TranslateMap[Cond] = CB;
 
     // RemoveDIs: track instructions that we optimise away while folding, so
-    // that we can copy DbgVariableRecords from them later.
+    // that we can copy DPValues from them later.
     BasicBlock::iterator SrcDbgCursor = BB->begin();
     for (BasicBlock::iterator BBI = BB->begin(); &*BBI != BI; ++BBI) {
       if (PHINode *PN = dyn_cast<PHINode>(BBI)) {
@@ -3857,10 +3849,10 @@ static bool performBranchToCommonDestFolding(BranchInst *BI, BranchInst *PBI,
 
   if (PredBlock->IsNewDbgInfoFormat) {
     PredBlock->getTerminator()->cloneDebugInfoFrom(BB->getTerminator());
-    for (DbgVariableRecord &DVR :
-         filterDbgVars(PredBlock->getTerminator()->getDbgRecordRange())) {
-      RemapDbgRecord(M, &DVR, VMap,
-                     RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+    for (DPValue &DPV :
+         DPValue::filter(PredBlock->getTerminator()->getDbgRecordRange())) {
+      RemapDPValue(M, &DPV, VMap,
+                   RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
     }
   }
 
@@ -6580,17 +6572,16 @@ static void reuseTableCompare(
   Constant *FalseConst = ConstantInt::getFalse(RangeCmp->getType());
 
   // Check if the compare with the default value is constant true or false.
-  const DataLayout &DL = PhiBlock->getModule()->getDataLayout();
-  Constant *DefaultConst = ConstantFoldCompareInstOperands(
-      CmpInst->getPredicate(), DefaultValue, CmpOp1, DL);
+  Constant *DefaultConst = ConstantExpr::getICmp(CmpInst->getPredicate(),
+                                                 DefaultValue, CmpOp1, true);
   if (DefaultConst != TrueConst && DefaultConst != FalseConst)
     return;
 
   // Check if the compare with the case values is distinct from the default
   // compare result.
   for (auto ValuePair : Values) {
-    Constant *CaseConst = ConstantFoldCompareInstOperands(
-        CmpInst->getPredicate(), ValuePair.second, CmpOp1, DL);
+    Constant *CaseConst = ConstantExpr::getICmp(CmpInst->getPredicate(),
+                                                ValuePair.second, CmpOp1, true);
     if (!CaseConst || CaseConst == DefaultConst ||
         (CaseConst != TrueConst && CaseConst != FalseConst))
       return;
@@ -6789,11 +6780,9 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
           return SwitchLookupTable::WouldFitInRegister(
               DL, UpperBound, KV.second /* ResultType */);
         })) {
-      // There may be some case index larger than the UpperBound (unreachable
-      // case), so make sure the table size does not get smaller.
-      TableSize = std::max(UpperBound, TableSize);
       // The default branch is unreachable after we enlarge the lookup table.
       // Adjust DefaultIsReachable to reuse code path.
+      TableSize = UpperBound;
       DefaultIsReachable = false;
     }
   }
@@ -7520,13 +7509,6 @@ static bool passingValueIsAlwaysUndefined(Value *V, Instruction *I, bool PtrValu
         return (!NullPointerIsDefined(SI->getFunction(),
                                       SI->getPointerAddressSpace())) &&
                SI->getPointerOperand() == I;
-
-    // llvm.assume(false/undef) always triggers immediate UB.
-    if (auto *Assume = dyn_cast<AssumeInst>(Use)) {
-      // Ignore assume operand bundles.
-      if (I == Assume->getArgOperand(0))
-        return true;
-    }
 
     if (auto *CB = dyn_cast<CallBase>(Use)) {
       if (C->isNullValue() && NullPointerIsDefined(CB->getFunction()))

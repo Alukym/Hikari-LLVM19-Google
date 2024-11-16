@@ -462,7 +462,10 @@ public:
 
   CounterMappingRegion getDecisionRegion() const { return Region; }
   unsigned getNumConditions() const {
-    return Region.getDecisionParams().NumConditions;
+    unsigned NumConditions = Region.getDecisionParams().NumConditions;
+    assert(NumConditions != 0 &&
+           "In MC/DC, NumConditions should never be zero!");
+    return NumConditions;
   }
   unsigned getNumTestVectors() const { return TV.size(); }
   bool isCondFolded(unsigned Condition) const { return Folded[Condition]; }

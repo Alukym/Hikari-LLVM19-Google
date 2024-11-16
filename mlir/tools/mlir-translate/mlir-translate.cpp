@@ -23,7 +23,6 @@ void registerTestRoundtripSPIRV();
 void registerTestRoundtripDebugSPIRV();
 #ifdef MLIR_INCLUDE_TESTS
 void registerTestToLLVMIR();
-void registerTestFromLLVMIR();
 #endif
 } // namespace mlir
 
@@ -32,7 +31,6 @@ static void registerTestTranslations() {
   registerTestRoundtripDebugSPIRV();
 #ifdef MLIR_INCLUDE_TESTS
   registerTestToLLVMIR();
-  registerTestFromLLVMIR();
 #endif
 }
 

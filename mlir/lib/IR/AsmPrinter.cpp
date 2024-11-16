@@ -189,11 +189,6 @@ struct AsmPrinterOptions {
       "mlir-print-value-users", llvm::cl::init(false),
       llvm::cl::desc(
           "Print users of operation results and block arguments as a comment")};
-
-  llvm::cl::opt<bool> printUniqueSSAIDs{
-      "mlir-print-unique-ssa-ids", llvm::cl::init(false),
-      llvm::cl::desc("Print unique SSA ID numbers for values, block arguments "
-                     "and naming conflicts across all regions")};
 };
 } // namespace
 
@@ -211,15 +206,12 @@ OpPrintingFlags::OpPrintingFlags()
     : printDebugInfoFlag(false), printDebugInfoPrettyFormFlag(false),
       printGenericOpFormFlag(false), skipRegionsFlag(false),
       assumeVerifiedFlag(false), printLocalScope(false),
-      printValueUsersFlag(false), printUniqueSSAIDsFlag(false) {
+      printValueUsersFlag(false) {
   // Initialize based upon command line options, if they are available.
   if (!clOptions.isConstructed())
     return;
   if (clOptions->elideElementsAttrIfLarger.getNumOccurrences())
     elementsAttrElementLimit = clOptions->elideElementsAttrIfLarger;
-  if (clOptions->printElementsAttrWithHexIfLarger.getNumOccurrences())
-    elementsAttrHexElementLimit =
-        clOptions->printElementsAttrWithHexIfLarger.getValue();
   if (clOptions->elideResourceStringsIfLarger.getNumOccurrences())
     resourceStringCharLimit = clOptions->elideResourceStringsIfLarger;
   printDebugInfoFlag = clOptions->printDebugInfoOpt;
@@ -229,7 +221,6 @@ OpPrintingFlags::OpPrintingFlags()
   printLocalScope = clOptions->printLocalScopeOpt;
   skipRegionsFlag = clOptions->skipRegionsOpt;
   printValueUsersFlag = clOptions->printValueUsers;
-  printUniqueSSAIDsFlag = clOptions->printUniqueSSAIDs;
 }
 
 /// Enable the elision of large elements attributes, by printing a '...'
@@ -239,12 +230,6 @@ OpPrintingFlags::OpPrintingFlags()
 OpPrintingFlags &
 OpPrintingFlags::elideLargeElementsAttrs(int64_t largeElementLimit) {
   elementsAttrElementLimit = largeElementLimit;
-  return *this;
-}
-
-OpPrintingFlags &
-OpPrintingFlags::printLargeElementsAttrWithHex(int64_t largeElementLimit) {
-  elementsAttrHexElementLimit = largeElementLimit;
   return *this;
 }
 
@@ -302,22 +287,9 @@ bool OpPrintingFlags::shouldElideElementsAttr(ElementsAttr attr) const {
          !llvm::isa<SplatElementsAttr>(attr);
 }
 
-/// Return if the given ElementsAttr should be printed as hex string.
-bool OpPrintingFlags::shouldPrintElementsAttrWithHex(ElementsAttr attr) const {
-  // -1 is used to disable hex printing.
-  return (elementsAttrHexElementLimit != -1) &&
-         (elementsAttrHexElementLimit < int64_t(attr.getNumElements())) &&
-         !llvm::isa<SplatElementsAttr>(attr);
-}
-
 /// Return the size limit for printing large ElementsAttr.
 std::optional<int64_t> OpPrintingFlags::getLargeElementsAttrLimit() const {
   return elementsAttrElementLimit;
-}
-
-/// Return the size limit for printing large ElementsAttr as hex string.
-int64_t OpPrintingFlags::getLargeElementsAttrHexLimit() const {
-  return elementsAttrHexElementLimit;
 }
 
 /// Return the size limit for printing large ElementsAttr.
@@ -356,9 +328,21 @@ bool OpPrintingFlags::shouldPrintValueUsers() const {
   return printValueUsersFlag;
 }
 
-/// Return if the printer should use unique IDs.
-bool OpPrintingFlags::shouldPrintUniqueSSAIDs() const {
-  return printUniqueSSAIDsFlag || shouldPrintGenericOpForm();
+/// Returns true if an ElementsAttr with the given number of elements should be
+/// printed with hex.
+static bool shouldPrintElementsAttrWithHex(int64_t numElements) {
+  // Check to see if a command line option was provided for the limit.
+  if (clOptions.isConstructed()) {
+    if (clOptions->printElementsAttrWithHexIfLarger.getNumOccurrences()) {
+      // -1 is used to disable hex printing.
+      if (clOptions->printElementsAttrWithHexIfLarger == -1)
+        return false;
+      return numElements > clOptions->printElementsAttrWithHexIfLarger;
+    }
+  }
+
+  // Otherwise, default to printing with hex if the number of elements is >100.
+  return numElements > 100;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1380,14 +1364,8 @@ SSANameState::SSANameState(Operation *op, const OpPrintingFlags &printerFlags)
   while (!nameContext.empty()) {
     Region *region;
     UsedNamesScopeTy *parentScope;
-
-    if (printerFlags.shouldPrintUniqueSSAIDs())
-      // To print unique SSA IDs, ignore saved ID counts from parent regions
-      std::tie(region, std::ignore, std::ignore, std::ignore, parentScope) =
-          nameContext.pop_back_val();
-    else
-      std::tie(region, nextValueID, nextArgumentID, nextConflictID,
-               parentScope) = nameContext.pop_back_val();
+    std::tie(region, nextValueID, nextArgumentID, nextConflictID, parentScope) =
+        nameContext.pop_back_val();
 
     // When we switch from one subtree to another, pop the scopes(needless)
     // until the parent scope.
@@ -2457,7 +2435,9 @@ void AsmPrinter::Impl::printDenseIntOrFPElementsAttr(
   auto elementType = type.getElementType();
 
   // Check to see if we should format this attribute as a hex string.
-  if (allowHex && printerFlags.shouldPrintElementsAttrWithHex(attr)) {
+  auto numElements = type.getNumElements();
+  if (!attr.isSplat() && allowHex &&
+      shouldPrintElementsAttrWithHex(numElements)) {
     ArrayRef<char> rawData = attr.getRawData();
     if (llvm::endianness::native == llvm::endianness::big) {
       // Convert endianess in big-endian(BE) machines. `rawData` is BE in BE

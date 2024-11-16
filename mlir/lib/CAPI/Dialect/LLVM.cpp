@@ -27,14 +27,6 @@ MlirType mlirLLVMPointerTypeGet(MlirContext ctx, unsigned addressSpace) {
   return wrap(LLVMPointerType::get(unwrap(ctx), addressSpace));
 }
 
-bool mlirTypeIsALLVMPointerType(MlirType type) {
-  return isa<LLVM::LLVMPointerType>(unwrap(type));
-}
-
-unsigned mlirLLVMPointerTypeGetAddressSpace(MlirType pointerType) {
-  return cast<LLVM::LLVMPointerType>(unwrap(pointerType)).getAddressSpace();
-}
-
 MlirType mlirLLVMVoidTypeGet(MlirContext ctx) {
   return wrap(LLVMVoidType::get(unwrap(ctx)));
 }
@@ -143,7 +135,7 @@ MlirAttribute mlirLLVMDIExpressionAttrGet(MlirContext ctx, intptr_t nOperations,
       unwrap(ctx),
       llvm::map_to_vector(
           unwrapList(nOperations, operations, attrStorage),
-          [](Attribute a) { return cast<DIExpressionElemAttr>(a); })));
+          [](Attribute a) { return a.cast<DIExpressionElemAttr>(); })));
 }
 
 MlirAttribute mlirLLVMDINullTypeAttrGet(MlirContext ctx) {
@@ -160,31 +152,32 @@ MlirAttribute mlirLLVMDIBasicTypeAttrGet(MlirContext ctx, unsigned int tag,
 }
 
 MlirAttribute mlirLLVMDICompositeTypeAttrGet(
-    MlirContext ctx, unsigned int tag, MlirAttribute recId, MlirAttribute name,
-    MlirAttribute file, uint32_t line, MlirAttribute scope,
-    MlirAttribute baseType, int64_t flags, uint64_t sizeInBits,
-    uint64_t alignInBits, intptr_t nElements, MlirAttribute const *elements) {
+    MlirContext ctx, unsigned int tag, MlirAttribute name, MlirAttribute file,
+    uint32_t line, MlirAttribute scope, MlirAttribute baseType, int64_t flags,
+    uint64_t sizeInBits, uint64_t alignInBits, intptr_t nElements,
+    MlirAttribute const *elements) {
   SmallVector<Attribute> elementsStorage;
   elementsStorage.reserve(nElements);
 
   return wrap(DICompositeTypeAttr::get(
-      unwrap(ctx), tag, cast<DistinctAttr>(unwrap(recId)),
-      cast<StringAttr>(unwrap(name)), cast<DIFileAttr>(unwrap(file)), line,
-      cast<DIScopeAttr>(unwrap(scope)), cast<DITypeAttr>(unwrap(baseType)),
-      DIFlags(flags), sizeInBits, alignInBits,
+      unwrap(ctx), tag, cast<StringAttr>(unwrap(name)),
+      cast<DIFileAttr>(unwrap(file)), line, cast<DIScopeAttr>(unwrap(scope)),
+      cast<DITypeAttr>(unwrap(baseType)), DIFlags(flags), sizeInBits,
+      alignInBits,
       llvm::map_to_vector(unwrapList(nElements, elements, elementsStorage),
-                          [](Attribute a) { return cast<DINodeAttr>(a); })));
+                          [](Attribute a) { return a.cast<DINodeAttr>(); })));
 }
 
-MlirAttribute
-mlirLLVMDIDerivedTypeAttrGet(MlirContext ctx, unsigned int tag,
-                             MlirAttribute name, MlirAttribute baseType,
-                             uint64_t sizeInBits, uint32_t alignInBits,
-                             uint64_t offsetInBits, MlirAttribute extraData) {
-  return wrap(DIDerivedTypeAttr::get(
-      unwrap(ctx), tag, cast<StringAttr>(unwrap(name)),
-      cast<DITypeAttr>(unwrap(baseType)), sizeInBits, alignInBits, offsetInBits,
-      cast<DINodeAttr>(unwrap(extraData))));
+MlirAttribute mlirLLVMDIDerivedTypeAttrGet(MlirContext ctx, unsigned int tag,
+                                           MlirAttribute name,
+                                           MlirAttribute baseType,
+                                           uint64_t sizeInBits,
+                                           uint32_t alignInBits,
+                                           uint64_t offsetInBits) {
+  return wrap(DIDerivedTypeAttr::get(unwrap(ctx), tag,
+                                     cast<StringAttr>(unwrap(name)),
+                                     cast<DITypeAttr>(unwrap(baseType)),
+                                     sizeInBits, alignInBits, offsetInBits));
 }
 
 MlirAttribute
@@ -214,13 +207,11 @@ MlirAttribute
 mlirLLVMDICompileUnitAttrGet(MlirContext ctx, MlirAttribute id,
                              unsigned int sourceLanguage, MlirAttribute file,
                              MlirAttribute producer, bool isOptimized,
-                             MlirLLVMDIEmissionKind emissionKind,
-                             MlirLLVMDINameTableKind nameTableKind) {
+                             MlirLLVMDIEmissionKind emissionKind) {
   return wrap(DICompileUnitAttr::get(
       unwrap(ctx), cast<DistinctAttr>(unwrap(id)), sourceLanguage,
       cast<DIFileAttr>(unwrap(file)), cast<StringAttr>(unwrap(producer)),
-      isOptimized, DIEmissionKind(emissionKind),
-      DINameTableKind(nameTableKind)));
+      isOptimized, DIEmissionKind(emissionKind)));
 }
 
 MlirAttribute mlirLLVMDIFlagsAttrGet(MlirContext ctx, uint64_t value) {
@@ -267,7 +258,7 @@ MlirAttribute mlirLLVMDISubroutineTypeAttrGet(MlirContext ctx,
   return wrap(DISubroutineTypeAttr::get(
       unwrap(ctx), callingConvention,
       llvm::map_to_vector(unwrapList(nTypes, types, attrStorage),
-                          [](Attribute a) { return cast<DITypeAttr>(a); })));
+                          [](Attribute a) { return a.cast<DITypeAttr>(); })));
 }
 
 MlirAttribute mlirLLVMDISubprogramAttrGet(

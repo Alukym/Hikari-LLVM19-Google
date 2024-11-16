@@ -110,6 +110,11 @@ SymbolFileDWARF::DIEToVariableSP &SymbolFileDWARFDwo::GetDIEToVariable() {
   return GetBaseSymbolFile().GetDIEToVariable();
 }
 
+SymbolFileDWARF::DIEToCompilerType &
+SymbolFileDWARFDwo::GetForwardDeclDIEToCompilerType() {
+  return GetBaseSymbolFile().GetForwardDeclDIEToCompilerType();
+}
+
 SymbolFileDWARF::CompilerTypeToDIE &
 SymbolFileDWARFDwo::GetForwardDeclCompilerTypeToDIE() {
   return GetBaseSymbolFile().GetForwardDeclCompilerTypeToDIE();

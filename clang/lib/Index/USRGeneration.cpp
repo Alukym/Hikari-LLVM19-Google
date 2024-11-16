@@ -267,13 +267,10 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     Out << '>';
   }
 
-  QualType CanonicalType = D->getType().getCanonicalType();
   // Mangle in type information for the arguments.
-  if (const auto *FPT = CanonicalType->getAs<FunctionProtoType>()) {
-    for (QualType PT : FPT->param_types()) {
-      Out << '#';
-      VisitType(PT);
-    }
+  for (auto *PD : D->parameters()) {
+    Out << '#';
+    VisitType(PD->getType());
   }
   if (D->isVariadic())
     Out << '.';

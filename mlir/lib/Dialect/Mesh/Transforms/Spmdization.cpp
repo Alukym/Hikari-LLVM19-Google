@@ -86,13 +86,14 @@ handlePartialAxesDuringResharding(OpBuilder &builder,
   }
 
   builder.setInsertionPointAfterValue(sourceShard);
-  TypedValue<ShapedType> resultValue = cast<TypedValue<ShapedType>>(
+  TypedValue<ShapedType> resultValue =
       builder
           .create<AllReduceOp>(sourceShard.getLoc(), sourceShard.getType(),
                                sourceSharding.getMesh().getLeafReference(),
                                allReduceMeshAxes, sourceShard,
                                sourceSharding.getPartialType())
-          .getResult());
+          .getResult()
+          .cast<TypedValue<ShapedType>>();
 
   llvm::SmallVector<MeshAxis> remainingPartialAxes;
   llvm::copy_if(sourceShardingPartialAxesSet,
@@ -134,12 +135,13 @@ splitLastAxisInResharding(ImplicitLocOpBuilder &builder,
                           MeshShardingAttr sourceSharding,
                           TypedValue<ShapedType> sourceShard, MeshOp mesh,
                           int64_t splitTensorAxis, MeshAxis splitMeshAxis) {
-  TypedValue<ShapedType> targetShard = cast<TypedValue<ShapedType>>(
+  TypedValue<ShapedType> targetShard =
       builder
           .create<AllSliceOp>(sourceShard, mesh,
                               ArrayRef<MeshAxis>(splitMeshAxis),
                               splitTensorAxis)
-          .getResult());
+          .getResult()
+          .cast<TypedValue<ShapedType>>();
   MeshShardingAttr targetSharding = targetShardingInSplitLastAxis(
       builder.getContext(), sourceSharding, splitTensorAxis, splitMeshAxis);
   return {targetShard, targetSharding};
@@ -276,8 +278,10 @@ unsplitLastAxisInResharding(ImplicitLocOpBuilder &builder,
       APInt(64, splitTensorAxis));
   ShapedType targetShape =
       shardShapedType(sourceUnshardedShape, mesh, targetSharding);
-  TypedValue<ShapedType> targetShard = cast<TypedValue<ShapedType>>(
-      builder.create<tensor::CastOp>(targetShape, allGatherResult).getResult());
+  TypedValue<ShapedType> targetShard =
+      builder.create<tensor::CastOp>(targetShape, allGatherResult)
+          .getResult()
+          .cast<TypedValue<ShapedType>>();
   return {targetShard, targetSharding};
 }
 
@@ -409,8 +413,10 @@ moveLastSplitAxisInResharding(ImplicitLocOpBuilder &builder, MeshOp mesh,
       APInt(64, targetTensorAxis), APInt(64, sourceTensorAxis));
   ShapedType targetShape =
       shardShapedType(sourceUnshardedShape, mesh, targetSharding);
-  TypedValue<ShapedType> targetShard = cast<TypedValue<ShapedType>>(
-      builder.create<tensor::CastOp>(targetShape, allToAllResult).getResult());
+  TypedValue<ShapedType> targetShard =
+      builder.create<tensor::CastOp>(targetShape, allToAllResult)
+          .getResult()
+          .cast<TypedValue<ShapedType>>();
   return {targetShard, targetSharding};
 }
 
@@ -499,7 +505,7 @@ TypedValue<ShapedType> reshard(OpBuilder &builder, MeshOp mesh, ShardOp source,
   ImplicitLocOpBuilder implicitLocOpBuilder(target->getLoc(), builder);
   return reshard(
       implicitLocOpBuilder, mesh, source.getShard(), target.getShard(),
-      cast<TypedValue<ShapedType>>(source.getSrc()), sourceShardValue);
+      source.getSrc().cast<TypedValue<ShapedType>>(), sourceShardValue);
 }
 
 TypedValue<ShapedType> reshard(OpBuilder &builder, ShardOp source,
@@ -527,22 +533,23 @@ SmallVector<Type>
 shardedBlockArgumentTypes(Block &block,
                           SymbolTableCollection &symbolTableCollection) {
   SmallVector<Type> res;
-  llvm::transform(
-      block.getArguments(), std::back_inserter(res),
-      [&symbolTableCollection](BlockArgument arg) {
-        auto rankedTensorArg = dyn_cast<TypedValue<RankedTensorType>>(arg);
-        if (!rankedTensorArg) {
-          return arg.getType();
-        }
+  llvm::transform(block.getArguments(), std::back_inserter(res),
+                  [&symbolTableCollection](BlockArgument arg) {
+                    auto rankedTensorArg =
+                        arg.dyn_cast<TypedValue<RankedTensorType>>();
+                    if (!rankedTensorArg) {
+                      return arg.getType();
+                    }
 
-        assert(rankedTensorArg.hasOneUse());
-        Operation *useOp = *rankedTensorArg.getUsers().begin();
-        ShardOp shardOp = llvm::dyn_cast<ShardOp>(useOp);
-        assert(shardOp);
-        MeshOp mesh = getMesh(shardOp, symbolTableCollection);
-        return cast<Type>(shardShapedType(rankedTensorArg.getType(), mesh,
-                                          shardOp.getShardAttr()));
-      });
+                    assert(rankedTensorArg.hasOneUse());
+                    Operation *useOp = *rankedTensorArg.getUsers().begin();
+                    ShardOp shardOp = llvm::dyn_cast<ShardOp>(useOp);
+                    assert(shardOp);
+                    MeshOp mesh = getMesh(shardOp, symbolTableCollection);
+                    return shardShapedType(rankedTensorArg.getType(), mesh,
+                                           shardOp.getShardAttr())
+                        .cast<Type>();
+                  });
   return res;
 }
 
@@ -580,7 +587,7 @@ static SmallVector<MeshShardingAttr> getOperandShardings(Operation &op) {
   res.reserve(op.getNumOperands());
   llvm::transform(op.getOperands(), std::back_inserter(res), [](Value operand) {
     TypedValue<RankedTensorType> rankedTensor =
-        dyn_cast<TypedValue<RankedTensorType>>(operand);
+        operand.dyn_cast<TypedValue<RankedTensorType>>();
     if (!rankedTensor) {
       return MeshShardingAttr();
     }
@@ -601,7 +608,7 @@ static SmallVector<MeshShardingAttr> getResultShardings(Operation &op) {
   llvm::transform(op.getResults(), std::back_inserter(res),
                   [](OpResult result) {
                     TypedValue<RankedTensorType> rankedTensor =
-                        dyn_cast<TypedValue<RankedTensorType>>(result);
+                        result.dyn_cast<TypedValue<RankedTensorType>>();
                     if (!rankedTensor) {
                       return MeshShardingAttr();
                     }
@@ -629,8 +636,9 @@ spmdizeOperation(ShardOp shardOp, IRMapping &spmdizationMap,
   } else {
     // Insert resharding.
     assert(!srcShardOp.getAnnotateForUsers() && shardOp.getAnnotateForUsers());
-    TypedValue<ShapedType> srcSpmdValue = cast<TypedValue<ShapedType>>(
-        spmdizationMap.lookup(srcShardOp.getOperand()));
+    TypedValue<ShapedType> srcSpmdValue =
+        spmdizationMap.lookup(srcShardOp.getOperand())
+            .cast<TypedValue<ShapedType>>();
     targetSpmdValue = reshard(builder, srcShardOp, shardOp, srcSpmdValue,
                               symbolTableCollection);
   }

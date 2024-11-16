@@ -43,15 +43,6 @@
 #define GET_SUBTARGETINFO_MC_DESC
 #include "RISCVGenSubtargetInfo.inc"
 
-namespace llvm::RISCVVInversePseudosTable {
-
-using namespace RISCV;
-
-#define GET_RISCVVInversePseudosTable_IMPL
-#include "RISCVGenSearchableTables.inc"
-
-} // namespace llvm::RISCVVInversePseudosTable
-
 using namespace llvm;
 
 static MCInstrInfo *createRISCVMCInstrInfo() {
@@ -332,9 +323,10 @@ namespace {
 MCStreamer *createRISCVELFStreamer(const Triple &T, MCContext &Context,
                                    std::unique_ptr<MCAsmBackend> &&MAB,
                                    std::unique_ptr<MCObjectWriter> &&MOW,
-                                   std::unique_ptr<MCCodeEmitter> &&MCE) {
+                                   std::unique_ptr<MCCodeEmitter> &&MCE,
+                                   bool RelaxAll) {
   return createRISCVELFStreamer(Context, std::move(MAB), std::move(MOW),
-                                std::move(MCE));
+                                std::move(MCE), RelaxAll);
 }
 } // end anonymous namespace
 

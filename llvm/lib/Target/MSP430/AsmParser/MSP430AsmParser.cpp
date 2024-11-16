@@ -183,7 +183,7 @@ public:
     return Tok;
   }
 
-  MCRegister getReg() const override {
+  unsigned getReg() const override {
     assert(Kind == k_Reg && "Invalid access!");
     return Reg;
   }

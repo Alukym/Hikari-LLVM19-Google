@@ -155,11 +155,7 @@ def iflags_op : Operand<i32> {
 
 // ARM Predicate operand. Default to 14 = always (AL). Second part is CC
 // register whose default is 0 (no register).
-def CondCodeOperand : AsmOperandClass {
-  let Name = "CondCode";
-  let DefaultMethod = "defaultCondCodeOp";
-  let IsOptional = true;
-}
+def CondCodeOperand : AsmOperandClass { let Name = "CondCode"; }
 def pred : PredicateOperand<OtherVT, (ops i32imm, i32imm),
                                      (ops (i32 14), (i32 zero_reg))> {
   let PrintMethod = "printPredicateOperand";
@@ -178,11 +174,7 @@ def cmovpred : Operand<i32>, PredicateOp,
 }
 
 // Conditional code result for instructions whose 's' bit is set, e.g. subs.
-def CCOutOperand : AsmOperandClass {
-  let Name = "CCOut";
-  let DefaultMethod = "defaultCCOutOp";
-  let IsOptional = true;
-}
+def CCOutOperand : AsmOperandClass { let Name = "CCOut"; }
 def cc_out : OptionalDefOperand<OtherVT, (ops CCR), (ops (i32 zero_reg))> {
   let EncoderMethod = "getCCOutOpValue";
   let PrintMethod = "printSBitModifierOperand";
@@ -210,14 +202,10 @@ def inv_cond_XFORM : SDNodeXForm<imm, [{
 def VPTPredNOperand : AsmOperandClass {
   let Name = "VPTPredN";
   let PredicateMethod = "isVPTPred";
-  let DefaultMethod = "defaultVPTPredOp";
-  let IsOptional = true;
 }
 def VPTPredROperand : AsmOperandClass {
   let Name = "VPTPredR";
   let PredicateMethod = "isVPTPred";
-  let DefaultMethod = "defaultVPTPredOp";
-  let IsOptional = true;
 }
 
 // Operand classes for the cluster of MC operands describing a
@@ -480,7 +468,7 @@ class InstThumb<AddrMode am, int sz, IndexMode im,
 // These are aliases that require C++ handling to convert to the target
 // instruction, while InstAliases can be handled directly by tblgen.
 class AsmPseudoInst<string asm, dag iops, dag oops = (outs)>
-  : InstTemplate<AddrModeNone, 4, IndexModeNone, Pseudo, GenericDomain,
+  : InstTemplate<AddrModeNone, 0, IndexModeNone, Pseudo, GenericDomain,
                  "", NoItinerary> {
   let OutOperandList = oops;
   let InOperandList = iops;

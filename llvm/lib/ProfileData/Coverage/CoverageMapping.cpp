@@ -338,6 +338,7 @@ public:
 #endif
     for (const auto *Branch : Branches) {
       const auto &BranchParams = Branch->getBranchParams();
+      assert(BranchParams.ID >= 0 && "CondID isn't set");
       assert(SeenIDs.insert(BranchParams.ID).second && "Duplicate CondID");
       NextIDs[BranchParams.ID] = BranchParams.Conds;
     }
@@ -693,6 +694,7 @@ private:
       assert(Branch.Kind == CounterMappingRegion::MCDCBranchRegion);
 
       auto ConditionID = Branch.getBranchParams().ID;
+      assert(ConditionID >= 0 && "ConditionID should be positive");
 
       if (ConditionIDs.contains(ConditionID) ||
           ConditionID >= DecisionParams.NumConditions)

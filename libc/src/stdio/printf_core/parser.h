@@ -10,7 +10,6 @@
 #define LLVM_LIBC_SRC_STDIO_PRINTF_CORE_PARSER_H
 
 #include "include/llvm-libc-macros/stdfix-macros.h"
-#include "src/__support/CPP/algorithm.h" // max
 #include "src/__support/CPP/optional.h"
 #include "src/__support/CPP/type_traits.h"
 #include "src/__support/str_to_integer.h"
@@ -151,10 +150,10 @@ public:
         }
       }
 
-      auto [lm, bw] = parse_length_modifier(&cur_pos);
+      LengthModifier lm = parse_length_modifier(&cur_pos);
+
       section.length_modifier = lm;
       section.conv_name = str[cur_pos];
-      section.bit_width = bw;
       switch (str[cur_pos]) {
       case ('%'):
         // Regardless of options, a % conversion is always safe. The standard
@@ -202,21 +201,6 @@ public:
         case (LengthModifier::t):
 
           WRITE_ARG_VAL_SIMPLEST(section.conv_val_raw, ptrdiff_t, conv_index);
-          break;
-
-        case (LengthModifier::w):
-        case (LengthModifier::wf):
-          if (bw == 0) {
-            section.has_conv = false;
-          } else if (bw <= INT_WIDTH) {
-            WRITE_ARG_VAL_SIMPLEST(section.conv_val_raw, int, conv_index);
-          } else if (bw <= LONG_WIDTH) {
-            WRITE_ARG_VAL_SIMPLEST(section.conv_val_raw, long, conv_index);
-          } else if (bw <= LLONG_WIDTH) {
-            WRITE_ARG_VAL_SIMPLEST(section.conv_val_raw, long long, conv_index);
-          } else {
-            WRITE_ARG_VAL_SIMPLEST(section.conv_val_raw, intmax_t, conv_index);
-          }
           break;
         }
         break;
@@ -322,54 +306,38 @@ private:
   // assumes that str[*local_pos] is inside a format specifier. It returns a
   // LengthModifier with the length modifier it found. It will advance local_pos
   // after the format specifier if one is found.
-  LIBC_INLINE LengthSpec parse_length_modifier(size_t *local_pos) {
+  LIBC_INLINE LengthModifier parse_length_modifier(size_t *local_pos) {
     switch (str[*local_pos]) {
     case ('l'):
       if (str[*local_pos + 1] == 'l') {
         *local_pos += 2;
-        return {LengthModifier::ll, 0};
+        return LengthModifier::ll;
       } else {
         ++*local_pos;
-        return {LengthModifier::l, 0};
+        return LengthModifier::l;
       }
-    case ('w'): {
-      LengthModifier lm;
-      if (str[*local_pos + 1] == 'f') {
-        *local_pos += 2;
-        lm = LengthModifier::wf;
-      } else {
-        ++*local_pos;
-        lm = LengthModifier::w;
-      }
-      if (internal::isdigit(str[*local_pos])) {
-        const auto result = internal::strtointeger<int>(str + *local_pos, 10);
-        *local_pos += result.parsed_len;
-        return {lm, static_cast<size_t>(cpp::max(0, result.value))};
-      }
-      return {lm, 0};
-    }
     case ('h'):
       if (str[*local_pos + 1] == 'h') {
         *local_pos += 2;
-        return {LengthModifier::hh, 0};
+        return LengthModifier::hh;
       } else {
         ++*local_pos;
-        return {LengthModifier::h, 0};
+        return LengthModifier::h;
       }
     case ('L'):
       ++*local_pos;
-      return {LengthModifier::L, 0};
+      return LengthModifier::L;
     case ('j'):
       ++*local_pos;
-      return {LengthModifier::j, 0};
+      return LengthModifier::j;
     case ('z'):
       ++*local_pos;
-      return {LengthModifier::z, 0};
+      return LengthModifier::z;
     case ('t'):
       ++*local_pos;
-      return {LengthModifier::t, 0};
+      return LengthModifier::t;
     default:
-      return {LengthModifier::none, 0};
+      return LengthModifier::none;
     }
   }
 
@@ -541,7 +509,7 @@ private:
           }
         }
 
-        auto [lm, bw] = parse_length_modifier(&local_pos);
+        LengthModifier lm = parse_length_modifier(&local_pos);
 
         // if we don't have an index for this conversion, then its position is
         // unknown and all this information is irrelevant. The rest of this
@@ -591,18 +559,6 @@ private:
             break;
           case (LengthModifier::t):
             conv_size = type_desc_from_type<ptrdiff_t>();
-            break;
-          case (LengthModifier::w):
-          case (LengthModifier::wf):
-            if (bw <= INT_WIDTH) {
-              conv_size = type_desc_from_type<int>();
-            } else if (bw <= LONG_WIDTH) {
-              conv_size = type_desc_from_type<long>();
-            } else if (bw <= LLONG_WIDTH) {
-              conv_size = type_desc_from_type<long long>();
-            } else {
-              conv_size = type_desc_from_type<intmax_t>();
-            }
             break;
           }
           break;

@@ -116,8 +116,7 @@ public:
   void LowerPATCHABLE_TAIL_CALL(const MachineInstr &MI);
   void LowerPATCHABLE_EVENT_CALL(const MachineInstr &MI, bool Typed);
 
-  typedef std::tuple<unsigned, bool, uint32_t, bool, uint64_t>
-      HwasanMemaccessTuple;
+  typedef std::tuple<unsigned, bool, uint32_t> HwasanMemaccessTuple;
   std::map<HwasanMemaccessTuple, MCSymbol *> HwasanMemaccessSymbols;
   void LowerKCFI_CHECK(const MachineInstr &MI);
   void LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI);
@@ -269,19 +268,13 @@ void AArch64AsmPrinter::emitStartOfAsmFile(Module &M) {
     if (Sign->getZExtValue())
       Flags |= ELF::GNU_PROPERTY_AARCH64_FEATURE_1_PAC;
 
-  uint64_t PAuthABIPlatform = -1;
-  if (const auto *PAP = mdconst::extract_or_null<ConstantInt>(
-          M.getModuleFlag("aarch64-elf-pauthabi-platform")))
-    PAuthABIPlatform = PAP->getZExtValue();
-  uint64_t PAuthABIVersion = -1;
-  if (const auto *PAV = mdconst::extract_or_null<ConstantInt>(
-          M.getModuleFlag("aarch64-elf-pauthabi-version")))
-    PAuthABIVersion = PAV->getZExtValue();
+  if (Flags == 0)
+    return;
 
   // Emit a .note.gnu.property section with the flags.
   auto *TS =
       static_cast<AArch64TargetStreamer *>(OutStreamer->getTargetStreamer());
-  TS->emitNoteSection(Flags, PAuthABIPlatform, PAuthABIVersion);
+  TS->emitNoteSection(Flags);
 }
 
 void AArch64AsmPrinter::emitFunctionHeaderComment() {
@@ -552,18 +545,10 @@ void AArch64AsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
 void AArch64AsmPrinter::LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI) {
   Register Reg = MI.getOperand(0).getReg();
   bool IsShort =
-      ((MI.getOpcode() == AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES) ||
-       (MI.getOpcode() ==
-        AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES_FIXEDSHADOW));
+      MI.getOpcode() == AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES;
   uint32_t AccessInfo = MI.getOperand(1).getImm();
-  bool IsFixedShadow =
-      ((MI.getOpcode() == AArch64::HWASAN_CHECK_MEMACCESS_FIXEDSHADOW) ||
-       (MI.getOpcode() ==
-        AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES_FIXEDSHADOW));
-  uint64_t FixedShadowOffset = IsFixedShadow ? MI.getOperand(2).getImm() : 0;
-
-  MCSymbol *&Sym = HwasanMemaccessSymbols[HwasanMemaccessTuple(
-      Reg, IsShort, AccessInfo, IsFixedShadow, FixedShadowOffset)];
+  MCSymbol *&Sym =
+      HwasanMemaccessSymbols[HwasanMemaccessTuple(Reg, IsShort, AccessInfo)];
   if (!Sym) {
     // FIXME: Make this work on non-ELF.
     if (!TM.getTargetTriple().isOSBinFormatELF())
@@ -571,8 +556,6 @@ void AArch64AsmPrinter::LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI) {
 
     std::string SymName = "__hwasan_check_x" + utostr(Reg - AArch64::X0) + "_" +
                           utostr(AccessInfo);
-    if (IsFixedShadow)
-      SymName += "_fixed_" + utostr(FixedShadowOffset);
     if (IsShort)
       SymName += "_short_v2";
     Sym = OutContext.getOrCreateSymbol(SymName);
@@ -607,8 +590,6 @@ void AArch64AsmPrinter::emitHwasanMemaccessSymbols(Module &M) {
     unsigned Reg = std::get<0>(P.first);
     bool IsShort = std::get<1>(P.first);
     uint32_t AccessInfo = std::get<2>(P.first);
-    bool IsFixedShadow = std::get<3>(P.first);
-    uint64_t FixedShadowOffset = std::get<4>(P.first);
     const MCSymbolRefExpr *HwasanTagMismatchRef =
         IsShort ? HwasanTagMismatchV2Ref : HwasanTagMismatchV1Ref;
     MCSymbol *Sym = P.second;
@@ -638,35 +619,14 @@ void AArch64AsmPrinter::emitHwasanMemaccessSymbols(Module &M) {
                                      .addImm(4)
                                      .addImm(55),
                                  *STI);
-
-    if (IsFixedShadow) {
-      // Aarch64 makes it difficult to embed large constants in the code.
-      // Fortuitously, kShadowBaseAlignment == 32, so we use the 32-bit
-      // left-shift option in the MOV instruction. Combined with the 16-bit
-      // immediate, this is enough to represent any offset up to 2**48.
-      OutStreamer->emitInstruction(MCInstBuilder(AArch64::MOVZXi)
-                                       .addReg(AArch64::X17)
-                                       .addImm(FixedShadowOffset >> 32)
-                                       .addImm(32),
-                                   *STI);
-      OutStreamer->emitInstruction(MCInstBuilder(AArch64::LDRBBroX)
-                                       .addReg(AArch64::W16)
-                                       .addReg(AArch64::X17)
-                                       .addReg(AArch64::X16)
-                                       .addImm(0)
-                                       .addImm(0),
-                                   *STI);
-    } else {
-      OutStreamer->emitInstruction(
-          MCInstBuilder(AArch64::LDRBBroX)
-              .addReg(AArch64::W16)
-              .addReg(IsShort ? AArch64::X20 : AArch64::X9)
-              .addReg(AArch64::X16)
-              .addImm(0)
-              .addImm(0),
-          *STI);
-    }
-
+    OutStreamer->emitInstruction(
+        MCInstBuilder(AArch64::LDRBBroX)
+            .addReg(AArch64::W16)
+            .addReg(IsShort ? AArch64::X20 : AArch64::X9)
+            .addReg(AArch64::X16)
+            .addImm(0)
+            .addImm(0),
+        *STI);
     OutStreamer->emitInstruction(
         MCInstBuilder(AArch64::SUBSXrs)
             .addReg(AArch64::XZR)
@@ -1799,8 +1759,6 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
 
   case AArch64::HWASAN_CHECK_MEMACCESS:
   case AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES:
-  case AArch64::HWASAN_CHECK_MEMACCESS_FIXEDSHADOW:
-  case AArch64::HWASAN_CHECK_MEMACCESS_SHORTGRANULES_FIXEDSHADOW:
     LowerHWASAN_CHECK_MEMACCESS(*MI);
     return;
 

@@ -307,8 +307,7 @@ def ForallOp : SCF_Op<"forall", [
        RecursiveMemoryEffects,
        SingleBlockImplicitTerminator<"scf::InParallelOp">,
        DeclareOpInterfaceMethods<RegionBranchOpInterface>,
-       DestinationStyleOpInterface,
-       HasParallelRegion
+       DestinationStyleOpInterface
      ]> {
   let summary = "evaluate a block multiple times in parallel";
   let description = [{
@@ -609,10 +608,6 @@ def ForallOp : SCF_Op<"forall", [
 
     // Declare the shared_outs as inits/outs to DestinationStyleOpInterface.
     MutableOperandRange getDpsInitsMutable() { return getOutputsMutable(); }
-
-    /// Returns operations within scf.forall.in_parallel whose destination
-    /// operand is the block argument `bbArg`.
-    SmallVector<Operation*> getCombiningOps(BlockArgument bbArg);
   }];
 }
 
@@ -769,8 +764,7 @@ def ParallelOp : SCF_Op<"parallel",
           "getSingleLowerBound", "getSingleUpperBound", "getSingleStep"]>,
      RecursiveMemoryEffects,
      DeclareOpInterfaceMethods<RegionBranchOpInterface>,
-     SingleBlockImplicitTerminator<"scf::ReduceOp">,
-     HasParallelRegion]> {
+     SingleBlockImplicitTerminator<"scf::ReduceOp">]> {
   let summary = "parallel for operation";
   let description = [{
     The "scf.parallel" operation represents a loop nest taking 4 groups of SSA

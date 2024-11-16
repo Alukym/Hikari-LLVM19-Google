@@ -495,7 +495,7 @@ void ARMLoadStoreOpt::UpdateBaseRegUses(MachineBasicBlock &MBB,
     bool InsertSub = false;
     unsigned Opc = MBBI->getOpcode();
 
-    if (MBBI->readsRegister(Base, /*TRI=*/nullptr)) {
+    if (MBBI->readsRegister(Base)) {
       int Offset;
       bool IsLoad =
         Opc == ARM::tLDRi || Opc == ARM::tLDRHi || Opc == ARM::tLDRBi;
@@ -560,8 +560,7 @@ void ARMLoadStoreOpt::UpdateBaseRegUses(MachineBasicBlock &MBB,
       return;
     }
 
-    if (MBBI->killsRegister(Base, /*TRI=*/nullptr) ||
-        MBBI->definesRegister(Base, /*TRI=*/nullptr))
+    if (MBBI->killsRegister(Base) || MBBI->definesRegister(Base))
       // Register got killed. Stop updating.
       return;
   }
@@ -889,7 +888,7 @@ MachineInstr *ARMLoadStoreOpt::MergeOpsUpdate(const MergeCandidate &Cand) {
         if (is_contained(ImpDefs, DefReg))
           continue;
         // We can ignore cases where the super-reg is read and written.
-        if (MI->readsRegister(DefReg, /*TRI=*/nullptr))
+        if (MI->readsRegister(DefReg))
           continue;
         ImpDefs.push_back(DefReg);
       }
@@ -904,7 +903,7 @@ MachineInstr *ARMLoadStoreOpt::MergeOpsUpdate(const MergeCandidate &Cand) {
   MachineBasicBlock &MBB = *LatestMI->getParent();
   unsigned Offset = getMemoryOpOffset(*First);
   Register Base = getLoadStoreBaseOp(*First).getReg();
-  bool BaseKill = LatestMI->killsRegister(Base, /*TRI=*/nullptr);
+  bool BaseKill = LatestMI->killsRegister(Base);
   Register PredReg;
   ARMCC::CondCodes Pred = getInstrPredicate(*First, PredReg);
   DebugLoc DL = First->getDebugLoc();
@@ -2077,8 +2076,7 @@ bool ARMLoadStoreOpt::CombineMovBx(MachineBasicBlock &MBB) {
 
   MachineBasicBlock::iterator Prev = MBBI;
   --Prev;
-  if (Prev->getOpcode() != ARM::tMOVr ||
-      !Prev->definesRegister(ARM::LR, /*TRI=*/nullptr))
+  if (Prev->getOpcode() != ARM::tMOVr || !Prev->definesRegister(ARM::LR))
     return false;
 
   for (auto Use : Prev->uses())
@@ -3178,7 +3176,7 @@ bool ARMPreAllocLoadStoreOpt::DistributeIncrements(Register Base) {
     if (PrePostInc || BaseAccess->getParent() != Increment->getParent())
       return false;
     Register PredReg;
-    if (Increment->definesRegister(ARM::CPSR, /*TRI=*/nullptr) ||
+    if (Increment->definesRegister(ARM::CPSR) ||
         getInstrPredicate(*Increment, PredReg) != ARMCC::AL)
       return false;
 

@@ -67,7 +67,6 @@ struct AvailabilityInfo {
   VersionTuple Introduced;
   VersionTuple Deprecated;
   VersionTuple Obsoleted;
-  bool Unavailable = false;
   bool UnconditionallyDeprecated = false;
   bool UnconditionallyUnavailable = false;
 
@@ -75,15 +74,6 @@ struct AvailabilityInfo {
 
   /// Determine if this AvailabilityInfo represents the default availability.
   bool isDefault() const { return *this == AvailabilityInfo(); }
-
-  /// Check if the symbol has been obsoleted.
-  bool isObsoleted() const { return !Obsoleted.empty(); }
-
-  /// Check if the symbol is unavailable unconditionally or
-  /// on the active platform and os version.
-  bool isUnavailable() const {
-    return Unavailable || isUnconditionallyUnavailable();
-  }
 
   /// Check if the symbol is unconditionally deprecated.
   ///
@@ -98,10 +88,9 @@ struct AvailabilityInfo {
   }
 
   AvailabilityInfo(StringRef Domain, VersionTuple I, VersionTuple D,
-                   VersionTuple O, bool U, bool UD, bool UU)
+                   VersionTuple O, bool UD, bool UU)
       : Domain(Domain), Introduced(I), Deprecated(D), Obsoleted(O),
-        Unavailable(U), UnconditionallyDeprecated(UD),
-        UnconditionallyUnavailable(UU) {}
+        UnconditionallyDeprecated(UD), UnconditionallyUnavailable(UU) {}
 
   friend bool operator==(const AvailabilityInfo &Lhs,
                          const AvailabilityInfo &Rhs);
@@ -113,10 +102,10 @@ public:
 inline bool operator==(const AvailabilityInfo &Lhs,
                        const AvailabilityInfo &Rhs) {
   return std::tie(Lhs.Introduced, Lhs.Deprecated, Lhs.Obsoleted,
-                  Lhs.Unavailable, Lhs.UnconditionallyDeprecated,
+                  Lhs.UnconditionallyDeprecated,
                   Lhs.UnconditionallyUnavailable) ==
          std::tie(Rhs.Introduced, Rhs.Deprecated, Rhs.Obsoleted,
-                  Rhs.Unavailable, Rhs.UnconditionallyDeprecated,
+                  Rhs.UnconditionallyDeprecated,
                   Rhs.UnconditionallyUnavailable);
 }
 

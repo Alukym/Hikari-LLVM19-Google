@@ -16,7 +16,9 @@
 #include <future>
 #include <limits>
 #ifdef _WIN32
-#include "flang/Common/windows-include.h"
+#define LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 #else
 #include <signal.h>
 #include <sys/wait.h>

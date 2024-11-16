@@ -10,7 +10,6 @@
 #define LLVMIR_ATTRDEFS
 
 include "mlir/Dialect/LLVMIR/LLVMDialect.td"
-include "mlir/Dialect/LLVMIR/LLVMInterfaces.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/CommonAttrConstraints.td"
 
@@ -239,7 +238,7 @@ def LoopAnnotationAttr : LLVM_Attr<"LoopAnnotation", "loop_annotation"> {
 //===----------------------------------------------------------------------===//
 
 class LLVM_DIParameter<string summary, string default, string parseName,
-                       string errorCase, string printName = parseName>
+                       string printName = parseName>
     : AttrOrTypeParameter<"unsigned", "debug info " # summary> {
   let parser = [{ [&]() -> FailureOr<unsigned> {
     SMLoc tagLoc = $_parser.getCurrentLocation();
@@ -247,35 +246,33 @@ class LLVM_DIParameter<string summary, string default, string parseName,
     if ($_parser.parseKeyword(&name))
       return failure();
 
-    unsigned tag = llvm::dwarf::get}] # parseName # [{(name);
-    if (tag == }] # errorCase # [{)
-      return $_parser.emitError(tagLoc)
-        << "invalid debug info }] # summary # [{ name: " << name;
-    return tag;
+    if (unsigned tag = llvm::dwarf::get}] # parseName # [{(name))
+      return tag;
+    return $_parser.emitError(tagLoc)
+      << "invalid debug info }] # summary # [{ name: " << name;
   }() }];
   let printer = "$_printer << llvm::dwarf::" # printName # "String($_self)";
   let defaultValue = default;
 }
 
 def LLVM_DICallingConventionParameter : LLVM_DIParameter<
-  "calling convention", /*default=*/"0", "CallingConvention", /*errorCase=*/"0",
-  "Convention"
+  "calling convention", /*default=*/"0", "CallingConvention", "Convention"
 >;
 
 def LLVM_DIEncodingParameter : LLVM_DIParameter<
-  "encoding", /*default=*/"0", "AttributeEncoding", /*errorCase=*/"0"
+  "encoding", /*default=*/"0", "AttributeEncoding"
 >;
 
 def LLVM_DILanguageParameter : LLVM_DIParameter<
-  "language", /*default=*/"", "Language", /*errorCase=*/"0"
+  "language", /*default=*/"", "Language"
 >;
 
 def LLVM_DITagParameter : LLVM_DIParameter<
-  "tag", /*default=*/"", "Tag", /*errorCase=*/"llvm::dwarf::DW_TAG_invalid"
+  "tag", /*default=*/"", "Tag"
 >;
 
 def LLVM_DIOperationEncodingParameter : LLVM_DIParameter<
-  "operation encoding", /*default=*/"", "OperationEncoding", /*errorCase=*/"0"
+  "operation encoding", /*default=*/"", "OperationEncoding"
 >;
 
 //===----------------------------------------------------------------------===//
@@ -350,20 +347,8 @@ def LLVM_DICompileUnitAttr : LLVM_Attr<"DICompileUnit", "di_compile_unit",
     "DIFileAttr":$file,
     OptionalParameter<"StringAttr">:$producer,
     "bool":$isOptimized,
-    "DIEmissionKind":$emissionKind,
-    OptionalParameter<"DINameTableKind">:$nameTableKind
+    "DIEmissionKind":$emissionKind
   );
-  let builders = [
-    AttrBuilderWithInferredContext<(ins
-      "DistinctAttr":$id, "unsigned":$sourceLanguage, "DIFileAttr":$file,
-      "StringAttr":$producer, "bool":$isOptimized,
-      "DIEmissionKind":$emissionKind,
-      CArg<"DINameTableKind", "DINameTableKind::Default">:$nameTableKind
-    ), [{
-      return $_get(id.getContext(), id, sourceLanguage, file, producer,
-                   isOptimized, emissionKind, nameTableKind);
-    }]>
-  ];
   let assemblyFormat = "`<` struct(params) `>`";
 }
 
@@ -372,11 +357,9 @@ def LLVM_DICompileUnitAttr : LLVM_Attr<"DICompileUnit", "di_compile_unit",
 //===----------------------------------------------------------------------===//
 
 def LLVM_DICompositeTypeAttr : LLVM_Attr<"DICompositeType", "di_composite_type",
-                                         [LLVM_DIRecursiveTypeAttrInterface],
-                                         "DITypeAttr"> {
+                                         /*traits=*/[], "DITypeAttr"> {
   let parameters = (ins
     LLVM_DITagParameter:$tag,
-    OptionalParameter<"DistinctAttr">:$recId,
     OptionalParameter<"StringAttr">:$name,
     OptionalParameter<"DIFileAttr">:$file,
     OptionalParameter<"uint32_t">:$line,
@@ -388,21 +371,6 @@ def LLVM_DICompositeTypeAttr : LLVM_Attr<"DICompositeType", "di_composite_type",
     OptionalArrayRefParameter<"DINodeAttr">:$elements
   );
   let assemblyFormat = "`<` struct(params) `>`";
-  let extraClassDeclaration = [{
-    /// Requirements of DIRecursiveTypeAttrInterface.
-    /// @{
-
-    /// Get whether this attr describes a recursive self reference.
-    bool isRecSelf() { return getTag() == 0; }
-
-    /// Get a copy of this type attr but with the recursive ID set to `recId`.
-    DIRecursiveTypeAttrInterface withRecId(DistinctAttr recId);
-
-    /// Build a rec-self instance using the provided `recId`.
-    static DIRecursiveTypeAttrInterface getRecSelf(DistinctAttr recId);
-
-    /// @}
-  }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -417,8 +385,7 @@ def LLVM_DIDerivedTypeAttr : LLVM_Attr<"DIDerivedType", "di_derived_type",
     OptionalParameter<"DITypeAttr">:$baseType,
     OptionalParameter<"uint64_t">:$sizeInBits,
     OptionalParameter<"uint32_t">:$alignInBits,
-    OptionalParameter<"uint64_t">:$offsetInBits,
-    OptionalParameter<"DINodeAttr">:$extraData
+    OptionalParameter<"uint64_t">:$offsetInBits
   );
   let assemblyFormat = "`<` struct(params) `>`";
 }
@@ -558,7 +525,7 @@ def LLVM_DISubprogramAttr : LLVM_Attr<"DISubprogram", "di_subprogram",
     "DIFileAttr":$file,
     OptionalParameter<"unsigned">:$line,
     OptionalParameter<"unsigned">:$scopeLine,
-    OptionalParameter<"DISubprogramFlags">:$subprogramFlags,
+    "DISubprogramFlags":$subprogramFlags,
     OptionalParameter<"DISubroutineTypeAttr">:$type
   );
   let builders = [

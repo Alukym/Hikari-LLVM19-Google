@@ -592,7 +592,7 @@ namespace {
     }
 
     bool ImplementationIsNonLazy(const ObjCImplDecl *OD) const {
-      const IdentifierInfo *II = &Context->Idents.get("load");
+      IdentifierInfo* II = &Context->Idents.get("load");
       Selector LoadSel = Context->Selectors.getSelector(0, &II);
       return OD->getClassMethod(LoadSel) != nullptr;
     }

@@ -239,8 +239,7 @@ func.func @transfer_broadcasting_complex(%mem : memref<10x20x30x8x8xf32>, %i : i
 
 
 module attributes {transform.with_named_sequence} {
-  transform.named_sequence @__transform_main(%root : !transform.any_op {transform.readonly}) {
-    %func_op = transform.structured.match ops{["func.func"]} in %root : (!transform.any_op) -> !transform.op<"func.func">
+  transform.named_sequence @__transform_main(%func_op: !transform.op<"func.func"> {transform.readonly}) {
     transform.apply_patterns to %func_op {
       transform.apply_patterns.vector.lower_transfer max_transfer_rank = 99
       transform.apply_patterns.vector.transfer_permutation_patterns
@@ -364,8 +363,7 @@ func.func @transfer_write_broadcast_unit_dim(
 }
 
 module attributes {transform.with_named_sequence} {
-  transform.named_sequence @__transform_main(%root : !transform.any_op {transform.readonly}) {
-    %func_op = transform.structured.match ops{["func.func"]} in %root : (!transform.any_op) -> !transform.op<"func.func">
+  transform.named_sequence @__transform_main(%func_op: !transform.op<"func.func"> {transform.readonly}) {
     transform.apply_patterns to %func_op {
       transform.apply_patterns.vector.lower_transfer max_transfer_rank = 99
       transform.apply_patterns.vector.transfer_permutation_patterns
@@ -393,8 +391,7 @@ func.func @transfer_2D_masked(%mem : memref<?x?xf32>, %mask : vector<2x4xi1>) ->
 }
 
 module attributes {transform.with_named_sequence} {
-  transform.named_sequence @__transform_main(%root : !transform.any_op {transform.readonly}) {
-    %func_op = transform.structured.match ops{["func.func"]} in %root : (!transform.any_op) -> !transform.op<"func.func">
+  transform.named_sequence @__transform_main(%func_op: !transform.op<"func.func"> {transform.readonly}) {
     transform.apply_patterns to %func_op {
       transform.apply_patterns.vector.lower_transfer max_transfer_rank = 2
     } : !transform.op<"func.func">

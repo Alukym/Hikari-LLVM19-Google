@@ -672,7 +672,7 @@ Expected<IFPtr> parseToInterfaceFile(const Object *File) {
       F->addParentUmbrella(Target, Lib);
   for (auto &[Path, Targets] : RPaths)
     for (auto Target : Targets)
-      F->addRPath(Path, Target);
+      F->addRPath(Target, Path);
   for (auto &[Targets, Symbols] : Exports)
     for (auto &Sym : Symbols)
       F->addSymbol(Sym.Kind, Sym.Name, Targets, Sym.Flags);

@@ -745,7 +745,7 @@ void CodeExtractor::severSplitPHINodesOfEntry(BasicBlock *&Header) {
 /// and other with remaining incoming blocks; then first PHIs are placed in
 /// outlined region.
 void CodeExtractor::severSplitPHINodesOfExits(
-    const SetVector<BasicBlock *> &Exits) {
+    const SmallPtrSetImpl<BasicBlock *> &Exits) {
   for (BasicBlock *ExitBB : Exits) {
     BasicBlock *NewBB = nullptr;
 
@@ -1010,18 +1010,6 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
 
     newFunction->addFnAttr(Attr);
   }
-
-  if (NumExitBlocks == 0) {
-    // Mark the new function `noreturn` if applicable. Terminators which resume
-    // exception propagation are treated as returning instructions. This is to
-    // avoid inserting traps after calls to outlined functions which unwind.
-    if (none_of(Blocks, [](const BasicBlock *BB) {
-          const Instruction *Term = BB->getTerminator();
-          return isa<ReturnInst>(Term) || isa<ResumeInst>(Term);
-        }))
-      newFunction->setDoesNotReturn();
-  }
-
   newFunction->insert(newFunction->end(), newRootNode);
 
   // Create scalar and aggregate iterators to name all of the arguments we
@@ -1404,23 +1392,19 @@ CallInst *CodeExtractor::emitCallAndSwitchStatement(Function *newFunction,
   case 0:
     // There are no successors (the block containing the switch itself), which
     // means that previously this was the last part of the function, and hence
-    // this should be rewritten as a `ret` or `unreachable`.
-    if (newFunction->doesNotReturn()) {
-      // If fn is no return, end with an unreachable terminator.
-      (void)new UnreachableInst(Context, TheSwitch->getIterator());
-    } else if (OldFnRetTy->isVoidTy()) {
-      // We have no return value.
-      ReturnInst::Create(Context, nullptr,
-                         TheSwitch->getIterator()); // Return void
+    // this should be rewritten as a `ret'
+
+    // Check if the function should return a value
+    if (OldFnRetTy->isVoidTy()) {
+      ReturnInst::Create(Context, nullptr, TheSwitch->getIterator());  // Return void
     } else if (OldFnRetTy == TheSwitch->getCondition()->getType()) {
       // return what we have
-      ReturnInst::Create(Context, TheSwitch->getCondition(),
-                         TheSwitch->getIterator());
+      ReturnInst::Create(Context, TheSwitch->getCondition(), TheSwitch->getIterator());
     } else {
       // Otherwise we must have code extracted an unwind or something, just
       // return whatever we want.
-      ReturnInst::Create(Context, Constant::getNullValue(OldFnRetTy),
-                         TheSwitch->getIterator());
+      ReturnInst::Create(Context,
+                         Constant::getNullValue(OldFnRetTy), TheSwitch->getIterator());
     }
 
     TheSwitch->eraseFromParent();
@@ -1524,14 +1508,14 @@ void CodeExtractor::calculateNewCallTerminatorWeights(
 static void eraseDebugIntrinsicsWithNonLocalRefs(Function &F) {
   for (Instruction &I : instructions(F)) {
     SmallVector<DbgVariableIntrinsic *, 4> DbgUsers;
-    SmallVector<DbgVariableRecord *, 4> DbgVariableRecords;
-    findDbgUsers(DbgUsers, &I, &DbgVariableRecords);
+    SmallVector<DPValue *, 4> DPValues;
+    findDbgUsers(DbgUsers, &I, &DPValues);
     for (DbgVariableIntrinsic *DVI : DbgUsers)
       if (DVI->getFunction() != &F)
         DVI->eraseFromParent();
-    for (DbgVariableRecord *DVR : DbgVariableRecords)
-      if (DVR->getFunction() != &F)
-        DVR->eraseFromParent();
+    for (DPValue *DPV : DPValues)
+      if (DPV->getFunction() != &F)
+        DPV->eraseFromParent();
   }
 }
 
@@ -1585,7 +1569,7 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
   //     point to a variable in the wrong scope.
   SmallDenseMap<DINode *, DINode *> RemappedMetadata;
   SmallVector<Instruction *, 4> DebugIntrinsicsToDelete;
-  SmallVector<DbgVariableRecord *, 4> DVRsToDelete;
+  SmallVector<DPValue *, 4> DPVsToDelete;
   DenseMap<const MDNode *, MDNode *> Cache;
 
   auto GetUpdatedDIVariable = [&](DILocalVariable *OldVar) {
@@ -1619,24 +1603,24 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
 
   auto UpdateDbgRecordsOnInst = [&](Instruction &I) -> void {
     for (DbgRecord &DR : I.getDbgRecordRange()) {
-      if (DbgLabelRecord *DLR = dyn_cast<DbgLabelRecord>(&DR)) {
-        UpdateDbgLabel(DLR);
+      if (DPLabel *DPL = dyn_cast<DPLabel>(&DR)) {
+        UpdateDbgLabel(DPL);
         continue;
       }
 
-      DbgVariableRecord &DVR = cast<DbgVariableRecord>(DR);
+      DPValue &DPV = cast<DPValue>(DR);
       // Apply the two updates that dbg.values get: invalid operands, and
       // variable metadata fixup.
-      if (any_of(DVR.location_ops(), IsInvalidLocation)) {
-        DVRsToDelete.push_back(&DVR);
+      if (any_of(DPV.location_ops(), IsInvalidLocation)) {
+        DPVsToDelete.push_back(&DPV);
         continue;
       }
-      if (DVR.isDbgAssign() && IsInvalidLocation(DVR.getAddress())) {
-        DVRsToDelete.push_back(&DVR);
+      if (DPV.isDbgAssign() && IsInvalidLocation(DPV.getAddress())) {
+        DPVsToDelete.push_back(&DPV);
         continue;
       }
-      if (!DVR.getDebugLoc().getInlinedAt())
-        DVR.setVariable(GetUpdatedDIVariable(DVR.getVariable()));
+      if (!DPV.getDebugLoc().getInlinedAt())
+        DPV.setVariable(GetUpdatedDIVariable(DPV.getVariable()));
     }
   };
 
@@ -1674,8 +1658,8 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
 
   for (auto *DII : DebugIntrinsicsToDelete)
     DII->eraseFromParent();
-  for (auto *DVR : DVRsToDelete)
-    DVR->getMarker()->MarkedInstr->dropOneDbgRecord(DVR);
+  for (auto *DPV : DPVsToDelete)
+    DPV->getMarker()->MarkedInstr->dropOneDbgRecord(DPV);
   DIB.finalizeSubprogram(NewSP);
 
   // Fix up the scope information attached to the line locations in the new
@@ -1751,7 +1735,7 @@ CodeExtractor::extractCodeRegion(const CodeExtractorAnalysisCache &CEAC,
   // Calculate the exit blocks for the extracted region and the total exit
   // weights for each of those blocks.
   DenseMap<BasicBlock *, BlockFrequency> ExitWeights;
-  SetVector<BasicBlock *> ExitBlocks;
+  SmallPtrSet<BasicBlock *, 1> ExitBlocks;
   for (BasicBlock *Block : Blocks) {
     for (BasicBlock *Succ : successors(Block)) {
       if (!Blocks.count(Succ)) {
@@ -1910,6 +1894,16 @@ CodeExtractor::extractCodeRegion(const CodeExtractorAnalysisCache &CEAC,
     }
 
   fixupDebugInfoPostExtraction(*oldFunction, *newFunction, *TheCall);
+
+  // Mark the new function `noreturn` if applicable. Terminators which resume
+  // exception propagation are treated as returning instructions. This is to
+  // avoid inserting traps after calls to outlined functions which unwind.
+  bool doesNotReturn = none_of(*newFunction, [](const BasicBlock &BB) {
+    const Instruction *Term = BB.getTerminator();
+    return isa<ReturnInst>(Term) || isa<ResumeInst>(Term);
+  });
+  if (doesNotReturn)
+    newFunction->setDoesNotReturn();
 
   LLVM_DEBUG(if (verifyFunction(*newFunction, &errs())) {
     newFunction->dump();

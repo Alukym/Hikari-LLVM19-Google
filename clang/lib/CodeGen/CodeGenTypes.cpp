@@ -409,7 +409,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       break;
     case BuiltinType::LongDouble:
       LongDoubleReferenced = true;
-      [[fallthrough]];
+      LLVM_FALLTHROUGH;
     case BuiltinType::BFloat16:
     case BuiltinType::Float:
     case BuiltinType::Double:
@@ -590,7 +590,6 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     ResultType = llvm::ArrayType::get(ResultType, 0);
     break;
   }
-  case Type::ArrayParameter:
   case Type::ConstantArray: {
     const ConstantArrayType *A = cast<ConstantArrayType>(Ty);
     llvm::Type *EltTy = ConvertTypeForMem(A->getElementType());
@@ -602,7 +601,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       EltTy = llvm::Type::getInt8Ty(getLLVMContext());
     }
 
-    ResultType = llvm::ArrayType::get(EltTy, A->getZExtSize());
+    ResultType = llvm::ArrayType::get(EltTy, A->getSize().getZExtValue());
     break;
   }
   case Type::ExtVector:

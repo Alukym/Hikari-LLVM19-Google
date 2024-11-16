@@ -160,9 +160,9 @@ public:
         : Source(Source), Destination(Destination), Type(Type) {}
 
     /// Return the source instruction of the dependence.
-    Instruction *getSource(const MemoryDepChecker &DepChecker) const;
+    Instruction *getSource(const LoopAccessInfo &LAI) const;
     /// Return the destination instruction of the dependence.
-    Instruction *getDestination(const MemoryDepChecker &DepChecker) const;
+    Instruction *getDestination(const LoopAccessInfo &LAI) const;
 
     /// Dependence types that don't prevent vectorization.
     static VectorizationSafetyStatus isSafeForVectorization(DepType Type);
@@ -579,11 +579,7 @@ public:
                  AAResults *AA, DominatorTree *DT, LoopInfo *LI);
 
   /// Return true we can analyze the memory accesses in the loop and there are
-  /// no memory dependence cycles. Note that for dependences between loads &
-  /// stores with uniform addresses,
-  /// hasStoreStoreDependenceInvolvingLoopInvariantAddress and
-  /// hasLoadStoreDependenceInvolvingLoopInvariantAddress also need to be
-  /// checked.
+  /// no memory dependence cycles.
   bool canVectorizeMemory() const { return CanVecMem; }
 
   /// Return true if there is a convergent operation in the loop. There may
@@ -636,16 +632,10 @@ public:
   /// Print the information about the memory accesses in the loop.
   void print(raw_ostream &OS, unsigned Depth = 0) const;
 
-  /// Return true if the loop has memory dependence involving two stores to an
-  /// invariant address, else return false.
-  bool hasStoreStoreDependenceInvolvingLoopInvariantAddress() const {
-    return HasStoreStoreDependenceInvolvingLoopInvariantAddress;
-  }
-
-  /// Return true if the loop has memory dependence involving a load and a store
-  /// to an invariant address, else return false.
-  bool hasLoadStoreDependenceInvolvingLoopInvariantAddress() const {
-    return HasLoadStoreDependenceInvolvingLoopInvariantAddress;
+  /// If the loop has memory dependence involving an invariant address, i.e. two
+  /// stores or a store and a load, then return true, else return false.
+  bool hasDependenceInvolvingLoopInvariantAddress() const {
+    return HasDependenceInvolvingLoopInvariantAddress;
   }
 
   /// Return the list of stores to invariant addresses.
@@ -707,12 +697,8 @@ private:
   bool CanVecMem = false;
   bool HasConvergentOp = false;
 
-  /// Indicator that there are two non vectorizable stores to the same uniform
-  /// address.
-  bool HasStoreStoreDependenceInvolvingLoopInvariantAddress = false;
-  /// Indicator that there is non vectorizable load and store to the same
-  /// uniform address.
-  bool HasLoadStoreDependenceInvolvingLoopInvariantAddress = false;
+  /// Indicator that there are non vectorizable stores to a uniform address.
+  bool HasDependenceInvolvingLoopInvariantAddress = false;
 
   /// List of stores to invariant addresses.
   SmallVector<StoreInst *> StoresToInvariantAddresses;
@@ -833,13 +819,13 @@ public:
 };
 
 inline Instruction *MemoryDepChecker::Dependence::getSource(
-    const MemoryDepChecker &DepChecker) const {
-  return DepChecker.getMemoryInstructions()[Source];
+    const LoopAccessInfo &LAI) const {
+  return LAI.getDepChecker().getMemoryInstructions()[Source];
 }
 
 inline Instruction *MemoryDepChecker::Dependence::getDestination(
-    const MemoryDepChecker &DepChecker) const {
-  return DepChecker.getMemoryInstructions()[Destination];
+    const LoopAccessInfo &LAI) const {
+  return LAI.getDepChecker().getMemoryInstructions()[Destination];
 }
 
 } // End llvm namespace

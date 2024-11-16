@@ -15,7 +15,6 @@
 
 #include "clang/AST/ASTDumperUtils.h"
 #include "clang/AST/AttrIterator.h"
-#include "clang/AST/DeclID.h"
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/SelectorLocationsKind.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -359,7 +358,7 @@ protected:
   /// \param Ctx The context in which we will allocate memory.
   /// \param ID The global ID of the deserialized declaration.
   /// \param Extra The amount of extra space to allocate after the object.
-  void *operator new(std::size_t Size, const ASTContext &Ctx, GlobalDeclID ID,
+  void *operator new(std::size_t Size, const ASTContext &Ctx, unsigned ID,
                      std::size_t Extra = 0);
 
   /// Allocate memory for a non-deserialized declaration.
@@ -670,8 +669,19 @@ public:
   /// Whether this declaration comes from another module unit.
   bool isInAnotherModuleUnit() const;
 
-  /// Whether this declaration comes from explicit global module.
-  bool isFromExplicitGlobalModule() const;
+  /// FIXME: Implement discarding declarations actually in global module
+  /// fragment. See [module.global.frag]p3,4 for details.
+  bool isDiscardedInGlobalModuleFragment() const { return false; }
+
+  /// Check if we should skip checking ODRHash for declaration \param D.
+  ///
+  /// The existing ODRHash mechanism seems to be not stable enough and
+  /// the false positive ODR violation reports are annoying and we rarely see
+  /// true ODR violation reports. Also we learned that MSVC disabled ODR checks
+  /// for declarations in GMF. So we try to disable ODR checks in the GMF to
+  /// get better user experiences before we make the ODR violation checks stable
+  /// enough.
+  bool shouldSkipCheckingODR() const;
 
   /// Return true if this declaration has an attribute which acts as
   /// definition of the entity, such as 'alias' or 'ifunc'.
@@ -777,10 +787,10 @@ public:
 
   /// Retrieve the global declaration ID associated with this
   /// declaration, which specifies where this Decl was loaded from.
-  GlobalDeclID getGlobalID() const {
+  unsigned getGlobalID() const {
     if (isFromASTFile())
-      return (*((const GlobalDeclID *)this - 1));
-    return GlobalDeclID();
+      return *((const unsigned*)this - 1);
+    return 0;
   }
 
   /// Retrieve the global ID of the module that owns this particular
@@ -1730,7 +1740,7 @@ class DeclContext {
     LLVM_PREFERRED_TYPE(bool)
     uint64_t IsExplicitlyDefaulted : 1;
     LLVM_PREFERRED_TYPE(bool)
-    uint64_t HasDefaultedOrDeletedInfo : 1;
+    uint64_t HasDefaultedFunctionInfo : 1;
 
     /// For member functions of complete types, whether this is an ineligible
     /// special member function or an unselected destructor. See

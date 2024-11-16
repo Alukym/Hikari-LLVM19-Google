@@ -61,13 +61,13 @@ static std::pair<bool, bool> GetSignReturnAddress(const Function &F) {
   }
 
   StringRef Scope = F.getFnAttribute("sign-return-address").getValueAsString();
-  if (Scope == "none")
+  if (Scope.equals("none"))
     return {false, false};
 
-  if (Scope == "all")
+  if (Scope.equals("all"))
     return {true, true};
 
-  assert(Scope == "non-leaf");
+  assert(Scope.equals("non-leaf"));
   return {true, false};
 }
 

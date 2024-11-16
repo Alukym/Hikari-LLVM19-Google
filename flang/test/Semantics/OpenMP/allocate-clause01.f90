@@ -1,5 +1,3 @@
-! REQUIRES: openmp_runtime
-
 ! RUN: %python %S/../test_errors.py %s %flang_fc1 -fopenmp
 ! OpenMP Version 5.2
 ! The allocate clause's allocator modifier must be of type allocator_handle

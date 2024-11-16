@@ -1869,15 +1869,15 @@ AppleObjCRuntimeV2::DynamicClassInfoExtractor::ComputeHelper(
       if (loader->IsFullyInitialized()) {
         switch (exe_ctx.GetTargetRef().GetDynamicClassInfoHelper()) {
         case eDynamicClassInfoHelperAuto:
-          [[fallthrough]];
+          LLVM_FALLTHROUGH;
         case eDynamicClassInfoHelperGetRealizedClassList:
           if (m_runtime.m_has_objc_getRealizedClassList_trylock)
             return DynamicClassInfoExtractor::objc_getRealizedClassList_trylock;
-          [[fallthrough]];
+          LLVM_FALLTHROUGH;
         case eDynamicClassInfoHelperCopyRealizedClassList:
           if (m_runtime.m_has_objc_copyRealizedClassList)
             return DynamicClassInfoExtractor::objc_copyRealizedClassList;
-          [[fallthrough]];
+          LLVM_FALLTHROUGH;
         case eDynamicClassInfoHelperRealizedClassesStruct:
           return DynamicClassInfoExtractor::gdb_objc_realized_classes;
         }
@@ -3154,7 +3154,7 @@ AppleObjCRuntimeV2::TaggedPointerVendorExtended::GetClassDescriptor(
                             << m_objc_debug_taggedpointer_ext_payload_lshift) >>
                            m_objc_debug_taggedpointer_ext_payload_rshift);
   int64_t data_payload_signed =
-      ((int64_t)((uint64_t)unobfuscated
+      ((int64_t)((int64_t)unobfuscated
                  << m_objc_debug_taggedpointer_ext_payload_lshift) >>
        m_objc_debug_taggedpointer_ext_payload_rshift);
 

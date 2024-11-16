@@ -515,12 +515,6 @@ private:
       }
     }
 
-    if (TheLine->First->is(TT_SwitchExpressionLabel)) {
-      return Style.AllowShortCaseExpressionOnASingleLine
-                 ? tryMergeShortCaseLabels(I, E, Limit)
-                 : 0;
-    }
-
     if (TheLine->Last->is(tok::l_brace)) {
       bool ShouldMerge = false;
       // Try to merge records.
@@ -802,12 +796,8 @@ private:
       }
     }
 
-    if (Line.endsWith(tok::l_brace)) {
-      if (Style.AllowShortBlocksOnASingleLine == FormatStyle::SBS_Never &&
-          Line.First->is(TT_BlockLBrace)) {
-        return 0;
-      }
-
+    if (const auto *LastNonComment = Line.getLastNonComment();
+        LastNonComment && LastNonComment->is(tok::l_brace)) {
       if (IsSplitBlock && Line.First == Line.Last &&
           I > AnnotatedLines.begin() &&
           (I[-1]->endsWith(tok::kw_else) || IsCtrlStmt(*I[-1]))) {

@@ -233,7 +233,6 @@ struct CommonConfig {
   NameMatcher UnneededSymbolsToRemove;
   NameMatcher SymbolsToWeaken;
   NameMatcher SymbolsToKeepGlobal;
-  NameMatcher SymbolsToSkip;
 
   // Map options
   StringMap<SectionRename> SectionsToRename;
@@ -262,9 +261,6 @@ struct CommonConfig {
   bool DecompressDebugSections = false;
 
   DebugCompressionType CompressionType = DebugCompressionType::None;
-
-  SmallVector<std::pair<NameMatcher, llvm::DebugCompressionType>, 0>
-      compressSections;
 };
 
 } // namespace objcopy

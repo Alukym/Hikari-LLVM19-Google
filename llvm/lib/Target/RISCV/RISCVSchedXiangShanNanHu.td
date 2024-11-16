@@ -85,7 +85,6 @@ def : WriteRes<WriteRotateImm32, [XS2ALU]>;
 def : WriteRes<WriteRotateReg, [XS2ALU]>;
 def : WriteRes<WriteRotateReg32, [XS2ALU]>;
 def : WriteRes<WriteORCB, [XS2ALU]>;
-def : WriteRes<WriteIMinMax, [XS2ALU]>;
 def : WriteRes<WriteREV8, [XS2ALU]>;
 
 // Zbkb
@@ -289,7 +288,6 @@ def : ReadAdvance<ReadCTZ32, 0>;
 def : ReadAdvance<ReadCPOP, 0>;
 def : ReadAdvance<ReadCPOP32, 0>;
 def : XS2LoadToALUBypass<ReadORCB>;
-def : XS2LoadToALUBypass<ReadIMinMax>;
 def : XS2LoadToALUBypass<ReadREV8>;
 // Zbkc
 def : ReadAdvance<ReadCLMUL, 0>;
@@ -311,6 +309,4 @@ defm : UnsupportedSchedZfa;
 defm : UnsupportedSchedZfh;
 defm : UnsupportedSchedSFB;
 defm : UnsupportedSchedZabha;
-defm : UnsupportedSchedXsfvcp;
-defm : UnsupportedSchedZvk;
 }

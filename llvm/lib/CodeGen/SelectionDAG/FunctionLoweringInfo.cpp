@@ -358,7 +358,7 @@ void FunctionLoweringInfo::clear() {
   StatepointRelocationMaps.clear();
   PreferredExtendType.clear();
   PreprocessedDbgDeclares.clear();
-  PreprocessedDVRDeclares.clear();
+  PreprocessedDPVDeclares.clear();
 }
 
 /// CreateReg - Allocate a single virtual register for the given type.

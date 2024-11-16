@@ -10,7 +10,6 @@
 #define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_MATINT_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include <cstdint>
 
@@ -48,10 +47,6 @@ using InstSeq = SmallVector<Inst, 8>;
 // order to allow this helper to be used from both the MC layer and during
 // instruction selection.
 InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI);
-
-// Helper to generate the generateInstSeq instruction sequence using MCInsts
-void generateMCInstSeq(int64_t Val, const MCSubtargetInfo &STI,
-                       MCRegister DestReg, SmallVectorImpl<MCInst> &Insts);
 
 // Helper to generate an instruction sequence that can materialize the given
 // immediate value into a register using an additional temporary register. This

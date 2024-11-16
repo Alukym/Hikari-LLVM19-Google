@@ -991,16 +991,15 @@ Value mlir::spirv::linearizeIndex(ValueRange indices, ArrayRef<int64_t> strides,
   // broken down into progressive small steps so we can have intermediate steps
   // using other dialects. At the moment SPIR-V is the final sink.
 
-  Value linearizedIndex = builder.createOrFold<spirv::ConstantOp>(
+  Value linearizedIndex = builder.create<spirv::ConstantOp>(
       loc, integerType, IntegerAttr::get(integerType, offset));
   for (const auto &index : llvm::enumerate(indices)) {
-    Value strideVal = builder.createOrFold<spirv::ConstantOp>(
+    Value strideVal = builder.create<spirv::ConstantOp>(
         loc, integerType,
         IntegerAttr::get(integerType, strides[index.index()]));
-    Value update =
-        builder.createOrFold<spirv::IMulOp>(loc, index.value(), strideVal);
+    Value update = builder.create<spirv::IMulOp>(loc, strideVal, index.value());
     linearizedIndex =
-        builder.createOrFold<spirv::IAddOp>(loc, update, linearizedIndex);
+        builder.create<spirv::IAddOp>(loc, linearizedIndex, update);
   }
   return linearizedIndex;
 }

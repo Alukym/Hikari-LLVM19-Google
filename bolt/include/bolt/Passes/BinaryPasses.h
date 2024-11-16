@@ -18,6 +18,7 @@
 #include "bolt/Core/DynoStats.h"
 #include "llvm/Support/CommandLine.h"
 #include <atomic>
+#include <map>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -400,7 +401,8 @@ public:
 /// dyno stats categories.
 class PrintProgramStats : public BinaryFunctionPass {
 public:
-  explicit PrintProgramStats() : BinaryFunctionPass(false) {}
+  explicit PrintProgramStats(const cl::opt<bool> &PrintPass)
+      : BinaryFunctionPass(PrintPass) {}
 
   const char *getName() const override { return "print-stats"; }
   bool shouldPrint(const BinaryFunction &) const override { return false; }

@@ -70,7 +70,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
@@ -138,8 +137,6 @@ class IndVarSimplify {
   SmallVector<WeakTrackingVH, 16> DeadInsts;
   bool WidenIndVars;
 
-  bool RunUnswitching = false;
-
   bool handleFloatingPointIV(Loop *L, PHINode *PH);
   bool rewriteNonIntegerIVs(Loop *L);
 
@@ -173,8 +170,6 @@ public:
   }
 
   bool run(Loop *L);
-
-  bool runUnswitching() const { return RunUnswitching; }
 };
 
 } // end anonymous namespace
@@ -359,18 +354,15 @@ bool IndVarSimplify::handleFloatingPointIV(Loop *L, PHINode *PN) {
       PHINode::Create(Int32Ty, 2, PN->getName() + ".int", PN->getIterator());
   NewPHI->addIncoming(ConstantInt::get(Int32Ty, InitValue),
                       PN->getIncomingBlock(IncomingEdge));
-  NewPHI->setDebugLoc(PN->getDebugLoc());
 
-  Instruction *NewAdd =
+  Value *NewAdd =
       BinaryOperator::CreateAdd(NewPHI, ConstantInt::get(Int32Ty, IncValue),
                                 Incr->getName() + ".int", Incr->getIterator());
-  NewAdd->setDebugLoc(Incr->getDebugLoc());
   NewPHI->addIncoming(NewAdd, PN->getIncomingBlock(BackEdge));
 
   ICmpInst *NewCompare =
       new ICmpInst(TheBr->getIterator(), NewPred, NewAdd,
                    ConstantInt::get(Int32Ty, ExitValue), Compare->getName());
-  NewCompare->setDebugLoc(Compare->getDebugLoc());
 
   // In the following deletions, PN may become dead and may be deleted.
   // Use a WeakTrackingVH to observe whether this happens.
@@ -394,9 +386,8 @@ bool IndVarSimplify::handleFloatingPointIV(Loop *L, PHINode *PN) {
   // We give preference to sitofp over uitofp because it is faster on most
   // platforms.
   if (WeakPH) {
-    Instruction *Conv = new SIToFPInst(NewPHI, PN->getType(), "indvar.conv",
-                                       PN->getParent()->getFirstInsertionPt());
-    Conv->setDebugLoc(PN->getDebugLoc());
+    Value *Conv = new SIToFPInst(NewPHI, PN->getType(), "indvar.conv",
+                                 PN->getParent()->getFirstInsertionPt());
     PN->replaceAllUsesWith(Conv);
     RecursivelyDeleteTriviallyDeadInstructions(PN, TLI, MSSAU.get());
   }
@@ -624,11 +615,9 @@ bool IndVarSimplify::simplifyAndExtend(Loop *L,
       // Information about sign/zero extensions of CurrIV.
       IndVarSimplifyVisitor Visitor(CurrIV, SE, TTI, DT);
 
-      const auto &[C, U] = simplifyUsersOfIV(CurrIV, SE, DT, LI, TTI, DeadInsts,
-                                             Rewriter, &Visitor);
+      Changed |= simplifyUsersOfIV(CurrIV, SE, DT, LI, TTI, DeadInsts, Rewriter,
+                                   &Visitor);
 
-      Changed |= C;
-      RunUnswitching |= U;
       if (Visitor.WI.WidestNativeType) {
         WideIVs.push_back(Visitor.WI);
       }
@@ -1885,7 +1874,6 @@ bool IndVarSimplify::predicateLoopExits(Loop *L, SCEVExpander &Rewriter) {
     if (OldCond->use_empty())
       DeadInsts.emplace_back(OldCond);
     Changed = true;
-    RunUnswitching = true;
   }
 
   return Changed;
@@ -2071,11 +2059,6 @@ PreservedAnalyses IndVarSimplifyPass::run(Loop &L, LoopAnalysisManager &AM,
 
   auto PA = getLoopPassPreservedAnalyses();
   PA.preserveSet<CFGAnalyses>();
-  if (IVS.runUnswitching()) {
-    AM.getResult<ShouldRunExtraSimpleLoopUnswitch>(L, AR);
-    PA.preserve<ShouldRunExtraSimpleLoopUnswitch>();
-  }
-
   if (AR.MSSA)
     PA.preserve<MemorySSAAnalysis>();
   return PA;

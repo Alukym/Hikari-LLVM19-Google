@@ -256,17 +256,15 @@ static const Symbol &FollowHostAssoc(const Symbol &symbol) {
 }
 
 bool IsHostAssociated(const Symbol &symbol, const Scope &scope) {
-  const Symbol &base{FollowHostAssoc(symbol)};
-  return base.owner().IsTopLevel() ||
-      DoesScopeContain(&GetProgramUnitOrBlockConstructContaining(base),
-          GetProgramUnitOrBlockConstructContaining(scope));
+  return DoesScopeContain(
+      &GetProgramUnitOrBlockConstructContaining(FollowHostAssoc(symbol)),
+      GetProgramUnitOrBlockConstructContaining(scope));
 }
 
 bool IsHostAssociatedIntoSubprogram(const Symbol &symbol, const Scope &scope) {
-  const Symbol &base{FollowHostAssoc(symbol)};
-  return base.owner().IsTopLevel() ||
-      DoesScopeContain(&GetProgramUnitOrBlockConstructContaining(base),
-          GetProgramUnitContaining(scope));
+  return DoesScopeContain(
+      &GetProgramUnitOrBlockConstructContaining(FollowHostAssoc(symbol)),
+      GetProgramUnitContaining(scope));
 }
 
 bool IsInStmtFunction(const Symbol &symbol) {
@@ -405,18 +403,6 @@ const Symbol &BypassGeneric(const Symbol &symbol) {
   return symbol;
 }
 
-const Symbol &GetCrayPointer(const Symbol &crayPointee) {
-  const Symbol *found{nullptr};
-  for (const auto &[pointee, pointer] :
-      crayPointee.GetUltimate().owner().crayPointers()) {
-    if (pointee == crayPointee.name()) {
-      found = &pointer.get();
-      break;
-    }
-  }
-  return DEREF(found);
-}
-
 bool ExprHasTypeCategory(
     const SomeExpr &expr, const common::TypeCategory &type) {
   auto dynamicType{expr.GetType()};
@@ -530,9 +516,7 @@ const Symbol *FindSubprogram(const Symbol &symbol) {
       symbol.details());
 }
 
-const Symbol *FindOverriddenBinding(
-    const Symbol &symbol, bool &isInaccessibleDeferred) {
-  isInaccessibleDeferred = false;
+const Symbol *FindOverriddenBinding(const Symbol &symbol) {
   if (symbol.has<ProcBindingDetails>()) {
     if (const DeclTypeSpec * parentType{FindParentTypeSpec(symbol.owner())}) {
       if (const DerivedTypeSpec * parentDerived{parentType->AsDerived()}) {
@@ -541,11 +525,8 @@ const Symbol *FindOverriddenBinding(
               overridden{parentScope->FindComponent(symbol.name())}) {
             // 7.5.7.3 p1: only accessible bindings are overridden
             if (!overridden->attrs().test(Attr::PRIVATE) ||
-                FindModuleContaining(overridden->owner()) ==
-                    FindModuleContaining(symbol.owner())) {
-              return overridden;
-            } else if (overridden->attrs().test(Attr::DEFERRED)) {
-              isInaccessibleDeferred = true;
+                (FindModuleContaining(overridden->owner()) ==
+                    FindModuleContaining(symbol.owner()))) {
               return overridden;
             }
           }
@@ -846,18 +827,15 @@ static const Symbol *HasImpureFinal(
   return IsFinalizable(derived, nullptr, /*withImpureFinalizer=*/true, rank);
 }
 
-const Symbol *HasImpureFinal(const Symbol &original, std::optional<int> rank) {
+const Symbol *HasImpureFinal(const Symbol &original) {
   const Symbol &symbol{ResolveAssociations(original)};
   if (symbol.has<ObjectEntityDetails>()) {
     if (const DeclTypeSpec * symType{symbol.GetType()}) {
       if (const DerivedTypeSpec * derived{symType->AsDerived()}) {
-        if (evaluate::IsAssumedRank(symbol)) {
-          // finalizable assumed-rank not allowed (C839)
-          return nullptr;
-        } else {
-          int actualRank{rank.value_or(symbol.Rank())};
-          return HasImpureFinal(*derived, actualRank);
-        }
+        // finalizable assumed-rank not allowed (C839)
+        return evaluate::IsAssumedRank(symbol)
+            ? nullptr
+            : HasImpureFinal(*derived, symbol.Rank());
       }
     }
   }
@@ -1294,8 +1272,6 @@ static bool StopAtComponentPre(const Symbol &component) {
     return !IsPointer(component);
   } else if constexpr (componentKind == ComponentKind::PotentialAndPointer) {
     return true;
-  } else {
-    DIE("unexpected ComponentKind");
   }
 }
 
@@ -1487,45 +1463,45 @@ const Symbol *IsFunctionResultWithSameNameAsFunction(const Symbol &symbol) {
 }
 
 void LabelEnforce::Post(const parser::GotoStmt &gotoStmt) {
-  CheckLabelUse(gotoStmt.v);
+  checkLabelUse(gotoStmt.v);
 }
 void LabelEnforce::Post(const parser::ComputedGotoStmt &computedGotoStmt) {
   for (auto &i : std::get<std::list<parser::Label>>(computedGotoStmt.t)) {
-    CheckLabelUse(i);
+    checkLabelUse(i);
   }
 }
 
 void LabelEnforce::Post(const parser::ArithmeticIfStmt &arithmeticIfStmt) {
-  CheckLabelUse(std::get<1>(arithmeticIfStmt.t));
-  CheckLabelUse(std::get<2>(arithmeticIfStmt.t));
-  CheckLabelUse(std::get<3>(arithmeticIfStmt.t));
+  checkLabelUse(std::get<1>(arithmeticIfStmt.t));
+  checkLabelUse(std::get<2>(arithmeticIfStmt.t));
+  checkLabelUse(std::get<3>(arithmeticIfStmt.t));
 }
 
 void LabelEnforce::Post(const parser::AssignStmt &assignStmt) {
-  CheckLabelUse(std::get<parser::Label>(assignStmt.t));
+  checkLabelUse(std::get<parser::Label>(assignStmt.t));
 }
 
 void LabelEnforce::Post(const parser::AssignedGotoStmt &assignedGotoStmt) {
   for (auto &i : std::get<std::list<parser::Label>>(assignedGotoStmt.t)) {
-    CheckLabelUse(i);
+    checkLabelUse(i);
   }
 }
 
 void LabelEnforce::Post(const parser::AltReturnSpec &altReturnSpec) {
-  CheckLabelUse(altReturnSpec.v);
+  checkLabelUse(altReturnSpec.v);
 }
 
 void LabelEnforce::Post(const parser::ErrLabel &errLabel) {
-  CheckLabelUse(errLabel.v);
+  checkLabelUse(errLabel.v);
 }
 void LabelEnforce::Post(const parser::EndLabel &endLabel) {
-  CheckLabelUse(endLabel.v);
+  checkLabelUse(endLabel.v);
 }
 void LabelEnforce::Post(const parser::EorLabel &eorLabel) {
-  CheckLabelUse(eorLabel.v);
+  checkLabelUse(eorLabel.v);
 }
 
-void LabelEnforce::CheckLabelUse(const parser::Label &labelUsed) {
+void LabelEnforce::checkLabelUse(const parser::Label &labelUsed) {
   if (labels_.find(labelUsed) == labels_.end()) {
     SayWithConstruct(context_, currentStatementSourcePosition_,
         parser::MessageFormattedText{

@@ -1,20 +1,16 @@
 #!/usr/bin/env python
 
-import argparse
 import libcxx.header_information
 import os
 import pathlib
 import re
-import sys
 import typing
 
 def IWYU_mapping(header: str) -> typing.Optional[typing.List[str]]:
     ignore = [
         "__debug_utils/.+",
         "__fwd/get[.]h",
-        "__pstl/.+",
         "__support/.+",
-        "__utility/private_constructor_tag.h",
     ]
     if any(re.match(pattern, header) for pattern in ignore):
         return None
@@ -53,18 +49,7 @@ def IWYU_mapping(header: str) -> typing.Optional[typing.List[str]]:
     else:
         return None
 
-
-def main(argv: typing.List[str]):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-o",
-        help="File to output the IWYU mappings into",
-        type=argparse.FileType("w"),
-        required=True,
-        dest="output",
-    )
-    args = parser.parse_args(argv)
-
+def main():
     mappings = []  # Pairs of (header, public_header)
     for header in libcxx.header_information.all_headers:
         public_headers = IWYU_mapping(header)
@@ -77,12 +62,13 @@ def main(argv: typing.List[str]):
         if public not in libcxx.header_information.public_headers:
             raise RuntimeError(f"{header}: Header {public} is not a valid header")
 
-    args.output.write("[\n")
-    for header, public in sorted(mappings):
-        args.output.write(
-            f'  {{ include: [ "<{header}>", "private", "<{public}>", "public" ] }},\n'
-        )
-    args.output.write("]\n")
+    with open(libcxx.header_information.include / "libcxx.imp", "w") as f:
+        f.write("[\n")
+        for header, public in sorted(mappings):
+            f.write(
+                f'  {{ include: [ "<{header}>", "private", "<{public}>", "public" ] }},\n'
+            )
+        f.write("]\n")
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

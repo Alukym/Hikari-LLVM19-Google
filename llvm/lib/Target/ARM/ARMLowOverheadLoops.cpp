@@ -91,11 +91,11 @@ static bool isVectorPredicated(MachineInstr *MI) {
 }
 
 static bool isVectorPredicate(MachineInstr *MI) {
-  return MI->findRegisterDefOperandIdx(ARM::VPR, /*TRI=*/nullptr) != -1;
+  return MI->findRegisterDefOperandIdx(ARM::VPR) != -1;
 }
 
 static bool hasVPRUse(MachineInstr &MI) {
-  return MI.findRegisterUseOperandIdx(ARM::VPR, /*TRI=*/nullptr) != -1;
+  return MI.findRegisterUseOperandIdx(ARM::VPR) != -1;
 }
 
 static bool isDomainMVE(MachineInstr *MI) {
@@ -564,8 +564,7 @@ static bool TryRemove(MachineInstr *MI, ReachingDefAnalysis &RDA,
     SmallPtrSet<MachineInstr *, 2> ModifiedITs;
     SmallPtrSet<MachineInstr *, 2> RemoveITs;
     for (auto *Dead : Killed) {
-      if (MachineOperand *MO =
-              Dead->findRegisterUseOperand(ARM::ITSTATE, /*TRI=*/nullptr)) {
+      if (MachineOperand *MO = Dead->findRegisterUseOperand(ARM::ITSTATE)) {
         MachineInstr *IT = RDA.getMIOperand(Dead, *MO);
         RemoveITs.insert(IT);
         auto &CurrentBlock = ITBlocks[IT];
@@ -1807,7 +1806,13 @@ void ARMLowOverheadLoops::Expand(LowOverheadLoop &LoLoop) {
   PostOrderLoopTraversal DFS(LoLoop.ML, *MLI);
   DFS.ProcessLoop();
   const SmallVectorImpl<MachineBasicBlock*> &PostOrder = DFS.getOrder();
-  fullyRecomputeLiveIns(PostOrder);
+  bool anyChange = false;
+  do {
+    anyChange = false;
+    for (auto *MBB : PostOrder) {
+      anyChange = recomputeLiveIns(*MBB) || anyChange;
+    }
+  } while (anyChange);
 
   for (auto *MBB : reverse(PostOrder))
     recomputeLivenessFlags(*MBB);

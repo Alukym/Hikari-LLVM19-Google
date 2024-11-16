@@ -12,7 +12,6 @@
 #include <__assert>
 #include <__availability>
 #include <__config>
-#include <__fwd/pair.h>
 #include <__memory_resource/memory_resource.h>
 #include <__utility/exception_guard.h>
 #include <cstddef>
@@ -61,7 +60,7 @@ public:
 
   // [mem.poly.allocator.mem]
 
-  [[nodiscard]] _LIBCPP_HIDE_FROM_ABI _ValueType* allocate(size_t __n) {
+  _LIBCPP_NODISCARD_AFTER_CXX17 _LIBCPP_HIDE_FROM_ABI _ValueType* allocate(size_t __n) {
     if (__n > __max_size()) {
       __throw_bad_array_new_length();
     }

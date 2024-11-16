@@ -12,7 +12,7 @@
 #include "test/UnitTest/Test.h"
 #include "utils/MPFRWrapper/MPFRUtils.h"
 
-#include "hdr/math_macros.h"
+#include <math.h>
 
 using LlvmLibcSinTest = LIBC_NAMESPACE::testing::FPTest<double>;
 

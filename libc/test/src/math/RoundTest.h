@@ -9,17 +9,15 @@
 #ifndef LLVM_LIBC_TEST_SRC_MATH_ROUNDTEST_H
 #define LLVM_LIBC_TEST_SRC_MATH_ROUNDTEST_H
 
-#include "test/UnitTest/FEnvSafeTest.h"
 #include "test/UnitTest/FPMatcher.h"
 #include "test/UnitTest/Test.h"
 #include "utils/MPFRWrapper/MPFRUtils.h"
 
-#include "hdr/math_macros.h"
+#include <math.h>
 
 namespace mpfr = LIBC_NAMESPACE::testing::mpfr;
 
-template <typename T>
-class RoundTest : public LIBC_NAMESPACE::testing::FEnvSafeTest {
+template <typename T> class RoundTest : public LIBC_NAMESPACE::testing::Test {
 
   DECLARE_SPECIAL_CONSTANTS(T)
 

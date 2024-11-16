@@ -338,10 +338,6 @@
 #define SYS_fchmodat __NR_fchmodat
 #endif
 
-#ifdef __NR_fchmodat2
-#define SYS_fchmodat2 __NR_fchmodat2
-#endif
-
 #ifdef __NR_fchown
 #define SYS_fchown __NR_fchown
 #endif

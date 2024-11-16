@@ -41,11 +41,6 @@
 using namespace mlir;
 using namespace mlir::omp;
 
-static ArrayAttr makeArrayAttr(MLIRContext *context,
-                               llvm::ArrayRef<Attribute> attrs) {
-  return attrs.empty() ? nullptr : ArrayAttr::get(context, attrs);
-}
-
 namespace {
 struct MemRefPointerLikeModel
     : public PointerLikeType::ExternalModel<MemRefPointerLikeModel,
@@ -470,17 +465,13 @@ static void printClauseWithRegionArgs(OpAsmPrinter &p, Operation *op,
                                       ValueRange argsSubrange,
                                       StringRef clauseName, ValueRange operands,
                                       TypeRange types, ArrayAttr symbols) {
-  if (!clauseName.empty())
-    p << clauseName << "(";
-
+  p << clauseName << "(";
   llvm::interleaveComma(
       llvm::zip_equal(symbols, operands, argsSubrange, types), p, [&p](auto t) {
         auto [sym, op, arg, type] = t;
         p << sym << " " << op << " -> " << arg << " : " << type;
       });
-
-  if (!clauseName.empty())
-    p << ") ";
+  p << ") ";
 }
 
 static ParseResult parseParallelRegion(
@@ -601,7 +592,7 @@ static LogicalResult verifyReductionVarList(Operation *op,
     Type varType = accum.getType();
     auto symbolRef = llvm::cast<SymbolRefAttr>(std::get<1>(args));
     auto decl =
-        SymbolTable::lookupNearestSymbolFrom<DeclareReductionOp>(op, symbolRef);
+        SymbolTable::lookupNearestSymbolFrom<ReductionDeclareOp>(op, symbolRef);
     if (!decl)
       return op->emitOpError() << "expected symbol reference " << symbolRef
                                << " to point to a reduction declaration";
@@ -1052,49 +1043,6 @@ static void printMapEntries(OpAsmPrinter &p, Operation *op,
   }
 }
 
-static ParseResult parsePrivateList(
-    OpAsmParser &parser,
-    SmallVectorImpl<OpAsmParser::UnresolvedOperand> &privateOperands,
-    SmallVectorImpl<Type> &privateOperandTypes, ArrayAttr &privatizerSymbols) {
-  SmallVector<SymbolRefAttr> privateSymRefs;
-  SmallVector<OpAsmParser::Argument> regionPrivateArgs;
-
-  if (failed(parser.parseCommaSeparatedList([&]() {
-        if (parser.parseAttribute(privateSymRefs.emplace_back()) ||
-            parser.parseOperand(privateOperands.emplace_back()) ||
-            parser.parseArrow() ||
-            parser.parseArgument(regionPrivateArgs.emplace_back()) ||
-            parser.parseColonType(privateOperandTypes.emplace_back()))
-          return failure();
-        return success();
-      })))
-    return failure();
-
-  SmallVector<Attribute> privateSymAttrs(privateSymRefs.begin(),
-                                         privateSymRefs.end());
-  privatizerSymbols = ArrayAttr::get(parser.getContext(), privateSymAttrs);
-
-  return success();
-}
-
-static void printPrivateList(OpAsmPrinter &p, Operation *op,
-                             ValueRange privateVarOperands,
-                             TypeRange privateVarTypes,
-                             ArrayAttr privatizerSymbols) {
-  // TODO: Remove target-specific logic from this function.
-  auto targetOp = mlir::dyn_cast<mlir::omp::TargetOp>(op);
-  assert(targetOp);
-
-  auto &region = op->getRegion(0);
-  auto *argsBegin = region.front().getArguments().begin();
-  MutableArrayRef argsSubrange(argsBegin + targetOp.getMapOperands().size(),
-                               argsBegin + targetOp.getMapOperands().size() +
-                                   privateVarTypes.size());
-  printClauseWithRegionArgs(
-      p, op, argsSubrange, /*clauseName=*/llvm::StringRef{}, privateVarOperands,
-      privateVarTypes, privatizerSymbols);
-}
-
 static void printCaptureType(OpAsmPrinter &p, Operation *op,
                              VariableCaptureKindAttr mapCaptureType) {
   std::string typeCapStr;
@@ -1164,18 +1112,18 @@ static LogicalResult verifyMapClause(Operation *op, OperandRange mapOperands) {
       bool implicit = mapTypeToBitFlag(
           mapTypeBits, llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_IMPLICIT);
 
-      if ((isa<TargetDataOp>(op) || isa<TargetOp>(op)) && del)
+      if ((isa<DataOp>(op) || isa<TargetOp>(op)) && del)
         return emitError(op->getLoc(),
                          "to, from, tofrom and alloc map types are permitted");
 
-      if (isa<TargetEnterDataOp>(op) && (from || del))
+      if (isa<EnterDataOp>(op) && (from || del))
         return emitError(op->getLoc(), "to and alloc map types are permitted");
 
-      if (isa<TargetExitDataOp>(op) && to)
+      if (isa<ExitDataOp>(op) && to)
         return emitError(op->getLoc(),
                          "from, release and delete map types are permitted");
 
-      if (isa<TargetUpdateOp>(op)) {
+      if (isa<UpdateDataOp>(op)) {
         if (del) {
           return emitError(op->getLoc(),
                            "at least one of to or from map types must be "
@@ -1213,18 +1161,7 @@ static LogicalResult verifyMapClause(Operation *op, OperandRange mapOperands) {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// TargetDataOp
-//===----------------------------------------------------------------------===//
-
-void TargetDataOp::build(OpBuilder &builder, OperationState &state,
-                         const TargetDataClauseOps &clauses) {
-  TargetDataOp::build(builder, state, clauses.ifVar, clauses.deviceVar,
-                      clauses.useDevicePtrVars, clauses.useDeviceAddrVars,
-                      clauses.mapVars);
-}
-
-LogicalResult TargetDataOp::verify() {
+LogicalResult DataOp::verify() {
   if (getMapOperands().empty() && getUseDevicePtr().empty() &&
       getUseDeviceAddr().empty()) {
     return ::emitError(this->getLoc(), "At least one of map, useDevicePtr, or "
@@ -1233,84 +1170,25 @@ LogicalResult TargetDataOp::verify() {
   return verifyMapClause(*this, getMapOperands());
 }
 
-//===----------------------------------------------------------------------===//
-// TargetEnterDataOp
-//===----------------------------------------------------------------------===//
-
-void TargetEnterDataOp::build(
-    OpBuilder &builder, OperationState &state,
-    const TargetEnterExitUpdateDataClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  TargetEnterDataOp::build(builder, state, clauses.ifVar, clauses.deviceVar,
-                           makeArrayAttr(ctx, clauses.dependTypeAttrs),
-                           clauses.dependVars, clauses.nowaitAttr,
-                           clauses.mapVars);
-}
-
-LogicalResult TargetEnterDataOp::verify() {
+LogicalResult EnterDataOp::verify() {
   LogicalResult verifyDependVars =
       verifyDependVarList(*this, getDepends(), getDependVars());
   return failed(verifyDependVars) ? verifyDependVars
                                   : verifyMapClause(*this, getMapOperands());
 }
 
-//===----------------------------------------------------------------------===//
-// TargetExitDataOp
-//===----------------------------------------------------------------------===//
-
-void TargetExitDataOp::build(
-    OpBuilder &builder, OperationState &state,
-    const TargetEnterExitUpdateDataClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  TargetExitDataOp::build(builder, state, clauses.ifVar, clauses.deviceVar,
-                          makeArrayAttr(ctx, clauses.dependTypeAttrs),
-                          clauses.dependVars, clauses.nowaitAttr,
-                          clauses.mapVars);
-}
-
-LogicalResult TargetExitDataOp::verify() {
+LogicalResult ExitDataOp::verify() {
   LogicalResult verifyDependVars =
       verifyDependVarList(*this, getDepends(), getDependVars());
   return failed(verifyDependVars) ? verifyDependVars
                                   : verifyMapClause(*this, getMapOperands());
 }
 
-//===----------------------------------------------------------------------===//
-// TargetUpdateOp
-//===----------------------------------------------------------------------===//
-
-void TargetUpdateOp::build(OpBuilder &builder, OperationState &state,
-                           const TargetEnterExitUpdateDataClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  TargetUpdateOp::build(builder, state, clauses.ifVar, clauses.deviceVar,
-                        makeArrayAttr(ctx, clauses.dependTypeAttrs),
-                        clauses.dependVars, clauses.nowaitAttr,
-                        clauses.mapVars);
-}
-
-LogicalResult TargetUpdateOp::verify() {
+LogicalResult UpdateDataOp::verify() {
   LogicalResult verifyDependVars =
       verifyDependVarList(*this, getDepends(), getDependVars());
   return failed(verifyDependVars) ? verifyDependVars
                                   : verifyMapClause(*this, getMapOperands());
-}
-
-//===----------------------------------------------------------------------===//
-// TargetOp
-//===----------------------------------------------------------------------===//
-
-void TargetOp::build(OpBuilder &builder, OperationState &state,
-                     const TargetClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: allocateVars, allocatorVars, inReductionVars,
-  // inReductionDeclSymbols, reductionVars, reductionByRefAttr,
-  // reductionDeclSymbols.
-  TargetOp::build(
-      builder, state, clauses.ifVar, clauses.deviceVar, clauses.threadLimitVar,
-      makeArrayAttr(ctx, clauses.dependTypeAttrs), clauses.dependVars,
-      clauses.nowaitAttr, clauses.isDevicePtrVars, clauses.hasDeviceAddrVars,
-      clauses.mapVars, clauses.privateVars,
-      makeArrayAttr(ctx, clauses.privatizers));
 }
 
 LogicalResult TargetOp::verify() {
@@ -1335,17 +1213,6 @@ void ParallelOp::build(OpBuilder &builder, OperationState &state,
   state.addAttributes(attributes);
 }
 
-void ParallelOp::build(OpBuilder &builder, OperationState &state,
-                       const ParallelClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  ParallelOp::build(
-      builder, state, clauses.ifVar, clauses.numThreadsVar,
-      clauses.allocateVars, clauses.allocatorVars, clauses.reductionVars,
-      makeArrayAttr(ctx, clauses.reductionDeclSymbols),
-      clauses.procBindKindAttr, clauses.privateVars,
-      makeArrayAttr(ctx, clauses.privatizers), clauses.reductionByRefAttr);
-}
-
 template <typename OpType>
 static LogicalResult verifyPrivateVarList(OpType &op) {
   auto privateVars = op.getPrivateVars();
@@ -1366,7 +1233,7 @@ static LogicalResult verifyPrivateVarList(OpType &op) {
   for (auto privateVarInfo : llvm::zip_equal(privateVars, privatizers)) {
     Type varType = std::get<0>(privateVarInfo).getType();
     SymbolRefAttr privatizerSym =
-        cast<SymbolRefAttr>(std::get<1>(privateVarInfo));
+        std::get<1>(privateVarInfo).template cast<SymbolRefAttr>();
     PrivateClauseOp privatizerOp =
         SymbolTable::lookupNearestSymbolFrom<PrivateClauseOp>(op,
                                                               privatizerSym);
@@ -1392,22 +1259,6 @@ static LogicalResult verifyPrivateVarList(OpType &op) {
 }
 
 LogicalResult ParallelOp::verify() {
-  // Check that it is a valid loop wrapper if it's taking that role.
-  if (isa<DistributeOp>((*this)->getParentOp())) {
-    if (!isWrapper())
-      return emitOpError() << "must take a loop wrapper role if nested inside "
-                              "of 'omp.distribute'";
-
-    if (LoopWrapperInterface nested = getNestedWrapper()) {
-      // Check for the allowed leaf constructs that may appear in a composite
-      // construct directly after PARALLEL.
-      if (!isa<WsloopOp>(nested))
-        return emitError() << "only supported nested wrapper is 'omp.wsloop'";
-    } else {
-      return emitOpError() << "must not wrap an 'omp.loop_nest' directly";
-    }
-  }
-
   if (getAllocateVars().size() != getAllocatorsVars().size())
     return emitError(
         "expected equal sizes for allocate and allocator variables");
@@ -1427,17 +1278,6 @@ static bool opInGlobalImplicitParallelRegion(Operation *op) {
     if (isa<OpenMPDialect>(op->getDialect()))
       return false;
   return true;
-}
-
-void TeamsOp::build(OpBuilder &builder, OperationState &state,
-                    const TeamsClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: reductionByRefAttr, privateVars, privatizers.
-  TeamsOp::build(builder, state, clauses.numTeamsLowerVar,
-                 clauses.numTeamsUpperVar, clauses.ifVar,
-                 clauses.threadLimitVar, clauses.allocateVars,
-                 clauses.allocatorVars, clauses.reductionVars,
-                 makeArrayAttr(ctx, clauses.reductionDeclSymbols));
 }
 
 LogicalResult TeamsOp::verify() {
@@ -1472,18 +1312,8 @@ LogicalResult TeamsOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// SectionsOp
+// Verifier for SectionsOp
 //===----------------------------------------------------------------------===//
-
-void SectionsOp::build(OpBuilder &builder, OperationState &state,
-                       const SectionsClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: reductionByRefAttr, privateVars, privatizers.
-  SectionsOp::build(builder, state, clauses.reductionVars,
-                    makeArrayAttr(ctx, clauses.reductionDeclSymbols),
-                    clauses.allocateVars, clauses.allocatorVars,
-                    clauses.nowaitAttr);
-}
 
 LogicalResult SectionsOp::verify() {
   if (getAllocateVars().size() != getAllocatorsVars().size())
@@ -1504,20 +1334,6 @@ LogicalResult SectionsOp::verifyRegions() {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// SingleOp
-//===----------------------------------------------------------------------===//
-
-void SingleOp::build(OpBuilder &builder, OperationState &state,
-                     const SingleClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: privateVars, privatizers.
-  SingleOp::build(builder, state, clauses.allocateVars, clauses.allocatorVars,
-                  clauses.copyprivateVars,
-                  makeArrayAttr(ctx, clauses.copyprivateFuncs),
-                  clauses.nowaitAttr);
-}
-
 LogicalResult SingleOp::verify() {
   // Check for allocate clause restrictions
   if (getAllocateVars().size() != getAllocatorsVars().size())
@@ -1529,124 +1345,167 @@ LogicalResult SingleOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// WsloopOp
+// WsLoopOp
 //===----------------------------------------------------------------------===//
 
+/// loop-control ::= `(` ssa-id-list `)` `:` type `=`  loop-bounds
+/// loop-bounds := `(` ssa-id-list `)` to `(` ssa-id-list `)` inclusive? steps
+/// steps := `step` `(`ssa-id-list`)`
 ParseResult
-parseWsloop(OpAsmParser &parser, Region &region,
+parseWsLoop(OpAsmParser &parser, Region &region,
+            SmallVectorImpl<OpAsmParser::UnresolvedOperand> &lowerBound,
+            SmallVectorImpl<OpAsmParser::UnresolvedOperand> &upperBound,
+            SmallVectorImpl<OpAsmParser::UnresolvedOperand> &steps,
+            SmallVectorImpl<Type> &loopVarTypes,
             SmallVectorImpl<OpAsmParser::UnresolvedOperand> &reductionOperands,
-            SmallVectorImpl<Type> &reductionTypes,
-            ArrayAttr &reductionSymbols) {
+            SmallVectorImpl<Type> &reductionTypes, ArrayAttr &reductionSymbols,
+            UnitAttr &inclusive) {
+
   // Parse an optional reduction clause
   llvm::SmallVector<OpAsmParser::Argument> privates;
-  if (succeeded(parser.parseOptionalKeyword("reduction"))) {
-    if (failed(parseClauseWithRegionArgs(parser, region, reductionOperands,
-                                         reductionTypes, reductionSymbols,
-                                         privates)))
-      return failure();
-  }
-  return parser.parseRegion(region, privates);
+  bool hasReduction = succeeded(parser.parseOptionalKeyword("reduction")) &&
+                      succeeded(parseClauseWithRegionArgs(
+                          parser, region, reductionOperands, reductionTypes,
+                          reductionSymbols, privates));
+
+  if (parser.parseKeyword("for"))
+    return failure();
+
+  // Parse an opening `(` followed by induction variables followed by `)`
+  SmallVector<OpAsmParser::Argument> ivs;
+  Type loopVarType;
+  if (parser.parseArgumentList(ivs, OpAsmParser::Delimiter::Paren) ||
+      parser.parseColonType(loopVarType) ||
+      // Parse loop bounds.
+      parser.parseEqual() ||
+      parser.parseOperandList(lowerBound, ivs.size(),
+                              OpAsmParser::Delimiter::Paren) ||
+      parser.parseKeyword("to") ||
+      parser.parseOperandList(upperBound, ivs.size(),
+                              OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (succeeded(parser.parseOptionalKeyword("inclusive")))
+    inclusive = UnitAttr::get(parser.getBuilder().getContext());
+
+  // Parse step values.
+  if (parser.parseKeyword("step") ||
+      parser.parseOperandList(steps, ivs.size(), OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  // Now parse the body.
+  loopVarTypes = SmallVector<Type>(ivs.size(), loopVarType);
+  for (auto &iv : ivs)
+    iv.type = loopVarType;
+
+  SmallVector<OpAsmParser::Argument> regionArgs{ivs};
+  if (hasReduction)
+    llvm::copy(privates, std::back_inserter(regionArgs));
+
+  return parser.parseRegion(region, regionArgs);
 }
 
-void printWsloop(OpAsmPrinter &p, Operation *op, Region &region,
-                 ValueRange reductionOperands, TypeRange reductionTypes,
-                 ArrayAttr reductionSymbols) {
+void printWsLoop(OpAsmPrinter &p, Operation *op, Region &region,
+                 ValueRange lowerBound, ValueRange upperBound, ValueRange steps,
+                 TypeRange loopVarTypes, ValueRange reductionOperands,
+                 TypeRange reductionTypes, ArrayAttr reductionSymbols,
+                 UnitAttr inclusive) {
   if (reductionSymbols) {
-    auto reductionArgs = region.front().getArguments();
+    auto reductionArgs =
+        region.front().getArguments().drop_front(loopVarTypes.size());
     printClauseWithRegionArgs(p, op, reductionArgs, "reduction",
                               reductionOperands, reductionTypes,
                               reductionSymbols);
   }
+
+  p << " for ";
+  auto args = region.front().getArguments().drop_back(reductionOperands.size());
+  p << " (" << args << ") : " << args[0].getType() << " = (" << lowerBound
+    << ") to (" << upperBound << ") ";
+  if (inclusive)
+    p << "inclusive ";
+  p << "step (" << steps << ") ";
   p.printRegion(region, /*printEntryBlockArgs=*/false);
 }
 
-void WsloopOp::build(OpBuilder &builder, OperationState &state,
-                     ArrayRef<NamedAttribute> attributes) {
-  build(builder, state, /*linear_vars=*/ValueRange(),
-        /*linear_step_vars=*/ValueRange(), /*reduction_vars=*/ValueRange(),
-        /*reductions=*/nullptr, /*schedule_val=*/nullptr,
-        /*schedule_chunk_var=*/nullptr, /*schedule_modifier=*/nullptr,
-        /*simd_modifier=*/false, /*nowait=*/false, /*byref=*/false,
-        /*ordered_val=*/nullptr, /*order_val=*/nullptr);
-  state.addAttributes(attributes);
+/// loop-control ::= `(` ssa-id-list `)` `:` type `=`  loop-bounds
+/// loop-bounds := `(` ssa-id-list `)` to `(` ssa-id-list `)` inclusive? steps
+/// steps := `step` `(`ssa-id-list`)`
+ParseResult
+parseLoopControl(OpAsmParser &parser, Region &region,
+                 SmallVectorImpl<OpAsmParser::UnresolvedOperand> &lowerBound,
+                 SmallVectorImpl<OpAsmParser::UnresolvedOperand> &upperBound,
+                 SmallVectorImpl<OpAsmParser::UnresolvedOperand> &steps,
+                 SmallVectorImpl<Type> &loopVarTypes, UnitAttr &inclusive) {
+  // Parse an opening `(` followed by induction variables followed by `)`
+  SmallVector<OpAsmParser::Argument> ivs;
+  Type loopVarType;
+  if (parser.parseArgumentList(ivs, OpAsmParser::Delimiter::Paren) ||
+      parser.parseColonType(loopVarType) ||
+      // Parse loop bounds.
+      parser.parseEqual() ||
+      parser.parseOperandList(lowerBound, ivs.size(),
+                              OpAsmParser::Delimiter::Paren) ||
+      parser.parseKeyword("to") ||
+      parser.parseOperandList(upperBound, ivs.size(),
+                              OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (succeeded(parser.parseOptionalKeyword("inclusive")))
+    inclusive = UnitAttr::get(parser.getBuilder().getContext());
+
+  // Parse step values.
+  if (parser.parseKeyword("step") ||
+      parser.parseOperandList(steps, ivs.size(), OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  // Now parse the body.
+  loopVarTypes = SmallVector<Type>(ivs.size(), loopVarType);
+  for (auto &iv : ivs)
+    iv.type = loopVarType;
+
+  return parser.parseRegion(region, ivs);
 }
 
-void WsloopOp::build(OpBuilder &builder, OperationState &state,
-                     const WsloopClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO: Store clauses in op: allocateVars, allocatorVars, privateVars,
-  // privatizers.
-  WsloopOp::build(
-      builder, state, clauses.linearVars, clauses.linearStepVars,
-      clauses.reductionVars, makeArrayAttr(ctx, clauses.reductionDeclSymbols),
-      clauses.scheduleValAttr, clauses.scheduleChunkVar,
-      clauses.scheduleModAttr, clauses.scheduleSimdAttr, clauses.nowaitAttr,
-      clauses.reductionByRefAttr, clauses.orderedAttr, clauses.orderAttr);
+void printLoopControl(OpAsmPrinter &p, Operation *op, Region &region,
+                      ValueRange lowerBound, ValueRange upperBound,
+                      ValueRange steps, TypeRange loopVarTypes,
+                      UnitAttr inclusive) {
+  auto args = region.front().getArguments();
+  p << " (" << args << ") : " << args[0].getType() << " = (" << lowerBound
+    << ") to (" << upperBound << ") ";
+  if (inclusive)
+    p << "inclusive ";
+  p << "step (" << steps << ") ";
+  p.printRegion(region, /*printEntryBlockArgs=*/false);
 }
 
-LogicalResult WsloopOp::verify() {
-  if (!isWrapper())
-    return emitOpError() << "must be a loop wrapper";
+//===----------------------------------------------------------------------===//
+// Verifier for Simd construct [2.9.3.1]
+//===----------------------------------------------------------------------===//
 
-  if (LoopWrapperInterface nested = getNestedWrapper()) {
-    // Check for the allowed leaf constructs that may appear in a composite
-    // construct directly after DO/FOR.
-    if (!isa<SimdOp>(nested))
-      return emitError() << "only supported nested wrapper is 'omp.simd'";
+LogicalResult SimdLoopOp::verify() {
+  if (this->getLowerBound().empty()) {
+    return emitOpError() << "empty lowerbound for simd loop operation";
   }
-
-  return verifyReductionVarList(*this, getReductions(), getReductionVars());
-}
-
-//===----------------------------------------------------------------------===//
-// Simd construct [2.9.3.1]
-//===----------------------------------------------------------------------===//
-
-void SimdOp::build(OpBuilder &builder, OperationState &state,
-                   const SimdClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: privateVars, reductionByRefAttr, reductionVars,
-  // privatizers, reductionDeclSymbols.
-  SimdOp::build(builder, state, clauses.alignedVars,
-                makeArrayAttr(ctx, clauses.alignmentAttrs), clauses.ifVar,
-                clauses.nontemporalVars, clauses.orderAttr, clauses.simdlenAttr,
-                clauses.safelenAttr);
-}
-
-LogicalResult SimdOp::verify() {
-  if (getSimdlen().has_value() && getSafelen().has_value() &&
-      getSimdlen().value() > getSafelen().value())
+  if (this->getSimdlen().has_value() && this->getSafelen().has_value() &&
+      this->getSimdlen().value() > this->getSafelen().value()) {
     return emitOpError()
            << "simdlen clause and safelen clause are both present, but the "
               "simdlen value is not less than or equal to safelen value";
-
-  if (verifyAlignedClause(*this, getAlignmentValues(), getAlignedVars())
+  }
+  if (verifyAlignedClause(*this, this->getAlignmentValues(),
+                          this->getAlignedVars())
           .failed())
     return failure();
-
-  if (verifyNontemporalClause(*this, getNontemporalVars()).failed())
+  if (verifyNontemporalClause(*this, this->getNontemporalVars()).failed())
     return failure();
-
-  if (!isWrapper())
-    return emitOpError() << "must be a loop wrapper";
-
-  if (getNestedWrapper())
-    return emitOpError() << "must wrap an 'omp.loop_nest' directly";
-
   return success();
 }
 
 //===----------------------------------------------------------------------===//
-// Distribute construct [2.9.4.1]
+// Verifier for Distribute construct [2.9.4.1]
 //===----------------------------------------------------------------------===//
-
-void DistributeOp::build(OpBuilder &builder, OperationState &state,
-                         const DistributeClauseOps &clauses) {
-  // TODO Store clauses in op: privateVars, privatizers.
-  DistributeOp::build(builder, state, clauses.distScheduleStaticAttr,
-                      clauses.distScheduleChunkSizeVar, clauses.allocateVars,
-                      clauses.allocatorVars, clauses.orderAttr);
-}
 
 LogicalResult DistributeOp::verify() {
   if (this->getChunkSize() && !this->getDistScheduleStatic())
@@ -1656,17 +1515,6 @@ LogicalResult DistributeOp::verify() {
   if (getAllocateVars().size() != getAllocatorsVars().size())
     return emitError(
         "expected equal sizes for allocate and allocator variables");
-
-  if (!isWrapper())
-    return emitOpError() << "must be a loop wrapper";
-
-  if (LoopWrapperInterface nested = getNestedWrapper()) {
-    // Check for the allowed leaf constructs that may appear in a composite
-    // construct directly after DISTRIBUTE.
-    if (!isa<ParallelOp, SimdOp>(nested))
-      return emitError() << "only supported nested wrappers are 'omp.parallel' "
-                            "and 'omp.simd'";
-  }
 
   return success();
 }
@@ -1683,29 +1531,14 @@ static ParseResult parseAtomicReductionRegion(OpAsmParser &parser,
 }
 
 static void printAtomicReductionRegion(OpAsmPrinter &printer,
-                                       DeclareReductionOp op, Region &region) {
+                                       ReductionDeclareOp op, Region &region) {
   if (region.empty())
     return;
   printer << "atomic ";
   printer.printRegion(region);
 }
 
-static ParseResult parseCleanupReductionRegion(OpAsmParser &parser,
-                                               Region &region) {
-  if (parser.parseOptionalKeyword("cleanup"))
-    return success();
-  return parser.parseRegion(region);
-}
-
-static void printCleanupReductionRegion(OpAsmPrinter &printer,
-                                        DeclareReductionOp op, Region &region) {
-  if (region.empty())
-    return;
-  printer << "cleanup ";
-  printer.printRegion(region);
-}
-
-LogicalResult DeclareReductionOp::verifyRegions() {
+LogicalResult ReductionDeclareOp::verifyRegions() {
   if (getInitializerRegion().empty())
     return emitOpError() << "expects non-empty initializer region";
   Block &initializerEntryBlock = getInitializerRegion().front();
@@ -1738,29 +1571,21 @@ LogicalResult DeclareReductionOp::verifyRegions() {
                               "of the reduction type";
   }
 
-  if (!getAtomicReductionRegion().empty()) {
-    Block &atomicReductionEntryBlock = getAtomicReductionRegion().front();
-    if (atomicReductionEntryBlock.getNumArguments() != 2 ||
-        atomicReductionEntryBlock.getArgumentTypes()[0] !=
-            atomicReductionEntryBlock.getArgumentTypes()[1])
-      return emitOpError() << "expects atomic reduction region with two "
-                              "arguments of the same type";
-    auto ptrType = llvm::dyn_cast<PointerLikeType>(
-        atomicReductionEntryBlock.getArgumentTypes()[0]);
-    if (!ptrType ||
-        (ptrType.getElementType() && ptrType.getElementType() != getType()))
-      return emitOpError() << "expects atomic reduction region arguments to "
-                              "be accumulators containing the reduction type";
-  }
-
-  if (getCleanupRegion().empty())
+  if (getAtomicReductionRegion().empty())
     return success();
-  Block &cleanupEntryBlock = getCleanupRegion().front();
-  if (cleanupEntryBlock.getNumArguments() != 1 ||
-      cleanupEntryBlock.getArgument(0).getType() != getType())
-    return emitOpError() << "expects cleanup region with one argument "
-                            "of the reduction type";
 
+  Block &atomicReductionEntryBlock = getAtomicReductionRegion().front();
+  if (atomicReductionEntryBlock.getNumArguments() != 2 ||
+      atomicReductionEntryBlock.getArgumentTypes()[0] !=
+          atomicReductionEntryBlock.getArgumentTypes()[1])
+    return emitOpError() << "expects atomic reduction region with two "
+                            "arguments of the same type";
+  auto ptrType = llvm::dyn_cast<PointerLikeType>(
+      atomicReductionEntryBlock.getArgumentTypes()[0]);
+  if (!ptrType ||
+      (ptrType.getElementType() && ptrType.getElementType() != getType()))
+    return emitOpError() << "expects atomic reduction region arguments to "
+                            "be accumulators containing the reduction type";
   return success();
 }
 
@@ -1782,19 +1607,6 @@ LogicalResult ReductionOp::verify() {
 //===----------------------------------------------------------------------===//
 // TaskOp
 //===----------------------------------------------------------------------===//
-
-void TaskOp::build(OpBuilder &builder, OperationState &state,
-                   const TaskClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: privateVars, privatizers.
-  TaskOp::build(
-      builder, state, clauses.ifVar, clauses.finalVar, clauses.untiedAttr,
-      clauses.mergeableAttr, clauses.inReductionVars,
-      makeArrayAttr(ctx, clauses.inReductionDeclSymbols), clauses.priorityVar,
-      makeArrayAttr(ctx, clauses.dependTypeAttrs), clauses.dependVars,
-      clauses.allocateVars, clauses.allocatorVars);
-}
-
 LogicalResult TaskOp::verify() {
   LogicalResult verifyDependVars =
       verifyDependVarList(*this, getDepends(), getDependVars());
@@ -1805,40 +1617,17 @@ LogicalResult TaskOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// TaskgroupOp
+// TaskGroupOp
 //===----------------------------------------------------------------------===//
-
-void TaskgroupOp::build(OpBuilder &builder, OperationState &state,
-                        const TaskgroupClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  TaskgroupOp::build(builder, state, clauses.taskReductionVars,
-                     makeArrayAttr(ctx, clauses.taskReductionDeclSymbols),
-                     clauses.allocateVars, clauses.allocatorVars);
-}
-
-LogicalResult TaskgroupOp::verify() {
+LogicalResult TaskGroupOp::verify() {
   return verifyReductionVarList(*this, getTaskReductions(),
                                 getTaskReductionVars());
 }
 
 //===----------------------------------------------------------------------===//
-// TaskloopOp
+// TaskLoopOp
 //===----------------------------------------------------------------------===//
-
-void TaskloopOp::build(OpBuilder &builder, OperationState &state,
-                       const TaskloopClauseOps &clauses) {
-  MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: reductionByRefAttr, privateVars, privatizers.
-  TaskloopOp::build(
-      builder, state, clauses.ifVar, clauses.finalVar, clauses.untiedAttr,
-      clauses.mergeableAttr, clauses.inReductionVars,
-      makeArrayAttr(ctx, clauses.inReductionDeclSymbols), clauses.reductionVars,
-      makeArrayAttr(ctx, clauses.reductionDeclSymbols), clauses.priorityVar,
-      clauses.allocateVars, clauses.allocatorVars, clauses.grainsizeVar,
-      clauses.numTasksVar, clauses.nogroupAttr);
-}
-
-SmallVector<Value> TaskloopOp::getAllReductionVars() {
+SmallVector<Value> TaskLoopOp::getAllReductionVars() {
   SmallVector<Value> allReductionNvars(getInReductionVars().begin(),
                                        getInReductionVars().end());
   allReductionNvars.insert(allReductionNvars.end(), getReductionVars().begin(),
@@ -1846,7 +1635,7 @@ SmallVector<Value> TaskloopOp::getAllReductionVars() {
   return allReductionNvars;
 }
 
-LogicalResult TaskloopOp::verify() {
+LogicalResult TaskLoopOp::verify() {
   if (getAllocateVars().size() != getAllocatorsVars().size())
     return emitError(
         "expected equal sizes for allocate and allocator variables");
@@ -1870,125 +1659,34 @@ LogicalResult TaskloopOp::verify() {
         "the grainsize clause and num_tasks clause are mutually exclusive and "
         "may not appear on the same taskloop directive");
   }
-
-  if (!isWrapper())
-    return emitOpError() << "must be a loop wrapper";
-
-  if (LoopWrapperInterface nested = getNestedWrapper()) {
-    // Check for the allowed leaf constructs that may appear in a composite
-    // construct directly after TASKLOOP.
-    if (!isa<SimdOp>(nested))
-      return emitError() << "only supported nested wrapper is 'omp.simd'";
-  }
   return success();
 }
 
 //===----------------------------------------------------------------------===//
-// LoopNestOp
+// WsLoopOp
 //===----------------------------------------------------------------------===//
 
-ParseResult LoopNestOp::parse(OpAsmParser &parser, OperationState &result) {
-  // Parse an opening `(` followed by induction variables followed by `)`
-  SmallVector<OpAsmParser::Argument> ivs;
-  SmallVector<OpAsmParser::UnresolvedOperand> lbs, ubs;
-  Type loopVarType;
-  if (parser.parseArgumentList(ivs, OpAsmParser::Delimiter::Paren) ||
-      parser.parseColonType(loopVarType) ||
-      // Parse loop bounds.
-      parser.parseEqual() ||
-      parser.parseOperandList(lbs, ivs.size(), OpAsmParser::Delimiter::Paren) ||
-      parser.parseKeyword("to") ||
-      parser.parseOperandList(ubs, ivs.size(), OpAsmParser::Delimiter::Paren))
-    return failure();
-
-  for (auto &iv : ivs)
-    iv.type = loopVarType;
-
-  // Parse "inclusive" flag.
-  if (succeeded(parser.parseOptionalKeyword("inclusive")))
-    result.addAttribute("inclusive",
-                        UnitAttr::get(parser.getBuilder().getContext()));
-
-  // Parse step values.
-  SmallVector<OpAsmParser::UnresolvedOperand> steps;
-  if (parser.parseKeyword("step") ||
-      parser.parseOperandList(steps, ivs.size(), OpAsmParser::Delimiter::Paren))
-    return failure();
-
-  // Parse the body.
-  Region *region = result.addRegion();
-  if (parser.parseRegion(*region, ivs))
-    return failure();
-
-  // Resolve operands.
-  if (parser.resolveOperands(lbs, loopVarType, result.operands) ||
-      parser.resolveOperands(ubs, loopVarType, result.operands) ||
-      parser.resolveOperands(steps, loopVarType, result.operands))
-    return failure();
-
-  // Parse the optional attribute list.
-  return parser.parseOptionalAttrDict(result.attributes);
+void WsLoopOp::build(OpBuilder &builder, OperationState &state,
+                     ValueRange lowerBound, ValueRange upperBound,
+                     ValueRange step, ArrayRef<NamedAttribute> attributes) {
+  build(builder, state, lowerBound, upperBound, step,
+        /*linear_vars=*/ValueRange(),
+        /*linear_step_vars=*/ValueRange(), /*reduction_vars=*/ValueRange(),
+        /*reductions=*/nullptr, /*schedule_val=*/nullptr,
+        /*schedule_chunk_var=*/nullptr, /*schedule_modifier=*/nullptr,
+        /*simd_modifier=*/false, /*nowait=*/false, /*byref=*/false,
+        /*ordered_val=*/nullptr,
+        /*order_val=*/nullptr, /*inclusive=*/false);
+  state.addAttributes(attributes);
 }
 
-void LoopNestOp::print(OpAsmPrinter &p) {
-  Region &region = getRegion();
-  auto args = region.getArguments();
-  p << " (" << args << ") : " << args[0].getType() << " = (" << getLowerBound()
-    << ") to (" << getUpperBound() << ") ";
-  if (getInclusive())
-    p << "inclusive ";
-  p << "step (" << getStep() << ") ";
-  p.printRegion(region, /*printEntryBlockArgs=*/false);
-}
-
-void LoopNestOp::build(OpBuilder &builder, OperationState &state,
-                       const LoopNestClauseOps &clauses) {
-  LoopNestOp::build(builder, state, clauses.loopLBVar, clauses.loopUBVar,
-                    clauses.loopStepVar, clauses.loopInclusiveAttr);
-}
-
-LogicalResult LoopNestOp::verify() {
-  if (getLowerBound().empty())
-    return emitOpError() << "must represent at least one loop";
-
-  if (getLowerBound().size() != getIVs().size())
-    return emitOpError() << "number of range arguments and IVs do not match";
-
-  for (auto [lb, iv] : llvm::zip_equal(getLowerBound(), getIVs())) {
-    if (lb.getType() != iv.getType())
-      return emitOpError()
-             << "range argument type does not match corresponding IV type";
-  }
-
-  auto wrapper =
-      llvm::dyn_cast_if_present<LoopWrapperInterface>((*this)->getParentOp());
-
-  if (!wrapper || !wrapper.isWrapper())
-    return emitOpError() << "expects parent op to be a valid loop wrapper";
-
-  return success();
-}
-
-void LoopNestOp::gatherWrappers(
-    SmallVectorImpl<LoopWrapperInterface> &wrappers) {
-  Operation *parent = (*this)->getParentOp();
-  while (auto wrapper =
-             llvm::dyn_cast_if_present<LoopWrapperInterface>(parent)) {
-    if (!wrapper.isWrapper())
-      break;
-    wrappers.push_back(wrapper);
-    parent = parent->getParentOp();
-  }
+LogicalResult WsLoopOp::verify() {
+  return verifyReductionVarList(*this, getReductions(), getReductionVars());
 }
 
 //===----------------------------------------------------------------------===//
-// Critical construct (2.17.1)
+// Verifier for critical construct (2.17.1)
 //===----------------------------------------------------------------------===//
-
-void CriticalDeclareOp::build(OpBuilder &builder, OperationState &state,
-                              const CriticalClauseOps &clauses) {
-  CriticalDeclareOp::build(builder, state, clauses.nameAttr, clauses.hintAttr);
-}
 
 LogicalResult CriticalDeclareOp::verify() {
   return verifySynchronizationHint(*this, getHintVal());
@@ -2009,54 +1707,18 @@ LogicalResult CriticalOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
 }
 
 //===----------------------------------------------------------------------===//
-// Ordered construct
+// Verifier for ordered construct
 //===----------------------------------------------------------------------===//
 
-static LogicalResult verifyOrderedParent(Operation &op) {
-  bool hasRegion = op.getNumRegions() > 0;
-  auto loopOp = op.getParentOfType<LoopNestOp>();
-  if (!loopOp) {
-    if (hasRegion)
-      return success();
-
-    // TODO: Consider if this needs to be the case only for the standalone
-    // variant of the ordered construct.
-    return op.emitOpError() << "must be nested inside of a loop";
-  }
-
-  Operation *wrapper = loopOp->getParentOp();
-  if (auto wsloopOp = dyn_cast<WsloopOp>(wrapper)) {
-    IntegerAttr orderedAttr = wsloopOp.getOrderedValAttr();
-    if (!orderedAttr)
-      return op.emitOpError() << "the enclosing worksharing-loop region must "
-                                 "have an ordered clause";
-
-    if (hasRegion && orderedAttr.getInt() != 0)
-      return op.emitOpError() << "the enclosing loop's ordered clause must not "
-                                 "have a parameter present";
-
-    if (!hasRegion && orderedAttr.getInt() == 0)
-      return op.emitOpError() << "the enclosing loop's ordered clause must "
-                                 "have a parameter present";
-  } else if (!isa<SimdOp>(wrapper)) {
-    return op.emitOpError() << "must be nested inside of a worksharing, simd "
-                               "or worksharing simd loop";
-  }
-  return success();
-}
-
-void OrderedOp::build(OpBuilder &builder, OperationState &state,
-                      const OrderedOpClauseOps &clauses) {
-  OrderedOp::build(builder, state, clauses.doacrossDependTypeAttr,
-                   clauses.doacrossNumLoopsAttr, clauses.doacrossVectorVars);
-}
-
 LogicalResult OrderedOp::verify() {
-  if (failed(verifyOrderedParent(**this)))
-    return failure();
+  auto container = (*this)->getParentOfType<WsLoopOp>();
+  if (!container || !container.getOrderedValAttr() ||
+      container.getOrderedValAttr().getInt() == 0)
+    return emitOpError() << "ordered depend directive must be closely "
+                         << "nested inside a worksharing-loop with ordered "
+                         << "clause with parameter present";
 
-  auto wrapper = (*this)->getParentOfType<WsloopOp>();
-  if (!wrapper || *wrapper.getOrderedVal() != *getNumLoopsVal())
+  if (container.getOrderedValAttr().getInt() != (int64_t)*getNumLoopsVal())
     return emitOpError() << "number of variables in depend clause does not "
                          << "match number of iteration variables in the "
                          << "doacross loop";
@@ -2064,27 +1726,20 @@ LogicalResult OrderedOp::verify() {
   return success();
 }
 
-void OrderedRegionOp::build(OpBuilder &builder, OperationState &state,
-                            const OrderedRegionClauseOps &clauses) {
-  OrderedRegionOp::build(builder, state, clauses.parLevelSimdAttr);
-}
-
 LogicalResult OrderedRegionOp::verify() {
   // TODO: The code generation for ordered simd directive is not supported yet.
   if (getSimd())
     return failure();
 
-  return verifyOrderedParent(**this);
-}
+  if (auto container = (*this)->getParentOfType<WsLoopOp>()) {
+    if (!container.getOrderedValAttr() ||
+        container.getOrderedValAttr().getInt() != 0)
+      return emitOpError() << "ordered region must be closely nested inside "
+                           << "a worksharing-loop region with an ordered "
+                           << "clause without parameter present";
+  }
 
-//===----------------------------------------------------------------------===//
-// TaskwaitOp
-//===----------------------------------------------------------------------===//
-
-void TaskwaitOp::build(OpBuilder &builder, OperationState &state,
-                       const TaskwaitClauseOps &clauses) {
-  // TODO Store clauses in op: dependTypeAttrs, dependVars, nowaitAttr.
-  TaskwaitOp::build(builder, state);
+  return success();
 }
 
 //===----------------------------------------------------------------------===//
@@ -2219,19 +1874,15 @@ LogicalResult CancelOp::verify() {
                          << "inside a parallel region";
   }
   if (cct == ClauseCancellationConstructType::Loop) {
-    auto loopOp = dyn_cast<LoopNestOp>(parentOp);
-    auto wsloopOp = llvm::dyn_cast_if_present<WsloopOp>(
-        loopOp ? loopOp->getParentOp() : nullptr);
-
-    if (!wsloopOp) {
-      return emitOpError()
-             << "cancel loop must appear inside a worksharing-loop region";
+    if (!isa<WsLoopOp>(parentOp)) {
+      return emitOpError() << "cancel loop must appear "
+                           << "inside a worksharing-loop region";
     }
-    if (wsloopOp.getNowaitAttr()) {
+    if (cast<WsLoopOp>(parentOp).getNowaitAttr()) {
       return emitError() << "A worksharing construct that is canceled "
                          << "must not have a nowait clause";
     }
-    if (wsloopOp.getOrderedValAttr()) {
+    if (cast<WsLoopOp>(parentOp).getOrderedValAttr()) {
       return emitError() << "A worksharing construct that is canceled "
                          << "must not have an ordered clause";
     }
@@ -2269,7 +1920,7 @@ LogicalResult CancellationPointOp::verify() {
                          << "inside a parallel region";
   }
   if ((cct == ClauseCancellationConstructType::Loop) &&
-      (!isa<LoopNestOp>(parentOp) || !isa<WsloopOp>(parentOp->getParentOp()))) {
+      !isa<WsLoopOp>(parentOp)) {
     return emitOpError() << "cancellation point loop must appear "
                          << "inside a worksharing-loop region";
   }
@@ -2283,10 +1934,10 @@ LogicalResult CancellationPointOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// MapBoundsOp
+// DataBoundsOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult MapBoundsOp::verify() {
+LogicalResult DataBoundsOp::verify() {
   auto extent = getExtent();
   auto upperbound = getUpperBound();
   if (!extent && !upperbound)
@@ -2306,8 +1957,7 @@ void PrivateClauseOp::build(OpBuilder &odsBuilder, OperationState &odsState,
 LogicalResult PrivateClauseOp::verify() {
   Type symType = getType();
 
-  auto verifyTerminator = [&](Operation *terminator,
-                              bool yieldsValue) -> LogicalResult {
+  auto verifyTerminator = [&](Operation *terminator) -> LogicalResult {
     if (!terminator->getBlock()->getSuccessors().empty())
       return success();
 
@@ -2317,14 +1967,6 @@ LogicalResult PrivateClauseOp::verify() {
 
     YieldOp yieldOp = llvm::cast<YieldOp>(terminator);
     TypeRange yieldedTypes = yieldOp.getResults().getTypes();
-
-    if (!yieldsValue) {
-      if (yieldedTypes.empty())
-        return success();
-
-      return mlir::emitError(terminator->getLoc())
-             << "Did not expect any values to be yielded.";
-    }
 
     if (yieldedTypes.size() == 1 && yieldedTypes.front() == symType)
       return success();
@@ -2342,8 +1984,7 @@ LogicalResult PrivateClauseOp::verify() {
   };
 
   auto verifyRegion = [&](Region &region, unsigned expectedNumArgs,
-                          StringRef regionName,
-                          bool yieldsValue) -> LogicalResult {
+                          StringRef regionName) -> LogicalResult {
     assert(!region.empty());
 
     if (region.getNumArguments() != expectedNumArgs)
@@ -2357,15 +1998,14 @@ LogicalResult PrivateClauseOp::verify() {
       if (!block.mightHaveTerminator())
         continue;
 
-      if (failed(verifyTerminator(block.getTerminator(), yieldsValue)))
+      if (failed(verifyTerminator(block.getTerminator())))
         return failure();
     }
 
     return success();
   };
 
-  if (failed(verifyRegion(getAllocRegion(), /*expectedNumArgs=*/1, "alloc",
-                          /*yieldsValue=*/true)))
+  if (failed(verifyRegion(getAllocRegion(), /*expectedNumArgs=*/1, "alloc")))
     return failure();
 
   DataSharingClauseType dsType = getDataSharingType();
@@ -2378,13 +2018,7 @@ LogicalResult PrivateClauseOp::verify() {
         "`firstprivate` clauses require both `alloc` and `copy` regions.");
 
   if (dsType == DataSharingClauseType::FirstPrivate &&
-      failed(verifyRegion(getCopyRegion(), /*expectedNumArgs=*/2, "copy",
-                          /*yieldsValue=*/true)))
-    return failure();
-
-  if (!getDeallocRegion().empty() &&
-      failed(verifyRegion(getDeallocRegion(), /*expectedNumArgs=*/1, "dealloc",
-                          /*yieldsValue=*/false)))
+      failed(verifyRegion(getCopyRegion(), /*expectedNumArgs=*/2, "copy")))
     return failure();
 
   return success();

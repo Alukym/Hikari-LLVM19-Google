@@ -1,6 +1,6 @@
 // REQUIRES: zlib && !zstd
 // REQUIRES: x86-registered-target
-// UNSUPPORTED: target={{.*}}-darwin{{.*}}, target={{.*}}-aix{{.*}}, target={{.*}}-zos{{.*}}
+// UNSUPPORTED: target={{.*}}-darwin{{.*}}, target={{.*}}-aix{{.*}}
 
 //
 // Generate the host binary to be bundled.

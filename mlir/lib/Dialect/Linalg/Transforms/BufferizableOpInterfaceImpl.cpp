@@ -11,7 +11,6 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Bufferization/IR/DstBufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/Operation.h"
@@ -110,10 +109,6 @@ struct LinalgOpInterface
   bool bufferizesToElementwiseAccess(Operation *op, const AnalysisState &state,
                                      ArrayRef<OpOperand *> opOperands) const {
     auto linalgOp = cast<linalg::LinalgOp>(op);
-
-    // Accesses into sparse data structures are not necessarily elementwise.
-    if (sparse_tensor::hasAnySparseOperand(linalgOp))
-      return false;
 
     // All loops must be parallel.
     if (linalgOp.getNumLoops() != linalgOp.getNumParallelLoops())

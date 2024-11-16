@@ -1063,13 +1063,11 @@ def CC_X86_64_Preserve_None : CallingConv<[
   //   - R10        'nest' parameter
   //   - RBX        base pointer
   //   - R16 - R31  these are not available everywhere
-  // Use non-volatile registers first, so functions using this convention can
-  // call "normal" functions without saving and restoring incoming values:
-  CCIfType<[i32], CCAssignToReg<[R12D, R13D, R14D, R15D, EDI, ESI,
-                                 EDX, ECX, R8D, R9D, R11D, EAX]>>,
+  CCIfType<[i32], CCAssignToReg<[EDI, ESI, EDX, ECX, R8D, R9D,
+	                         R11D, R12D, R13D, R14D, R15D, EAX]>>,
 
-  CCIfType<[i64], CCAssignToReg<[R12, R13, R14, R15, RDI, RSI,
-                                 RDX, RCX, R8, R9, R11, RAX]>>,
+  CCIfType<[i64], CCAssignToReg<[RDI, RSI, RDX, RCX, R8, R9,
+                                 R11, R12, R13, R14, R15, RAX]>>,
 
   // Otherwise it's the same as the regular C calling convention.
   CCDelegateTo<CC_X86_64_C>

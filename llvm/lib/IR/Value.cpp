@@ -574,16 +574,16 @@ void Value::replaceUsesWithIf(Value *New,
 /// with New.
 static void replaceDbgUsesOutsideBlock(Value *V, Value *New, BasicBlock *BB) {
   SmallVector<DbgVariableIntrinsic *> DbgUsers;
-  SmallVector<DbgVariableRecord *> DPUsers;
+  SmallVector<DPValue *> DPUsers;
   findDbgUsers(DbgUsers, V, &DPUsers);
   for (auto *DVI : DbgUsers) {
     if (DVI->getParent() != BB)
       DVI->replaceVariableLocationOp(V, New);
   }
-  for (auto *DVR : DPUsers) {
-    DbgMarker *Marker = DVR->getMarker();
+  for (auto *DPV : DPUsers) {
+    DPMarker *Marker = DPV->getMarker();
     if (Marker->getParent() != BB)
-      DVR->replaceVariableLocationOp(V, New);
+      DPV->replaceVariableLocationOp(V, New);
   }
 }
 

@@ -26,21 +26,20 @@ using namespace llvm;
 
 /// Return a constant boolean vector that has true elements in all positions
 /// where the input constant data vector has an element with the sign bit set.
-static Constant *getNegativeIsTrueBoolVec(Constant *V, const DataLayout &DL) {
+static Constant *getNegativeIsTrueBoolVec(Constant *V) {
   VectorType *IntTy = VectorType::getInteger(cast<VectorType>(V->getType()));
   V = ConstantExpr::getBitCast(V, IntTy);
-  V = ConstantFoldCompareInstOperands(CmpInst::ICMP_SGT,
-                                      Constant::getNullValue(IntTy), V, DL);
-  assert(V && "Vector must be foldable");
+  V = ConstantExpr::getICmp(CmpInst::ICMP_SGT, Constant::getNullValue(IntTy),
+                            V);
   return V;
 }
 
 /// Convert the x86 XMM integer vector mask to a vector of bools based on
 /// each element's most significant bit (the sign bit).
-static Value *getBoolVecFromMask(Value *Mask, const DataLayout &DL) {
+static Value *getBoolVecFromMask(Value *Mask) {
   // Fold Constant Mask.
   if (auto *ConstantMask = dyn_cast<ConstantDataVector>(Mask))
-    return getNegativeIsTrueBoolVec(ConstantMask, DL);
+    return getNegativeIsTrueBoolVec(ConstantMask);
 
   // Mask was extended from a boolean vector.
   Value *ExtMask;
@@ -66,7 +65,7 @@ static Instruction *simplifyX86MaskedLoad(IntrinsicInst &II, InstCombiner &IC) {
 
   // The mask is constant or extended from a bool vector. Convert this x86
   // intrinsic to the LLVM intrinsic to allow target-independent optimizations.
-  if (Value *BoolMask = getBoolVecFromMask(Mask, IC.getDataLayout())) {
+  if (Value *BoolMask = getBoolVecFromMask(Mask)) {
     // First, cast the x86 intrinsic scalar pointer to a vector pointer to match
     // the LLVM intrinsic definition for the pointer argument.
     unsigned AddrSpace = cast<PointerType>(Ptr->getType())->getAddressSpace();
@@ -103,7 +102,7 @@ static bool simplifyX86MaskedStore(IntrinsicInst &II, InstCombiner &IC) {
 
   // The mask is constant or extended from a bool vector. Convert this x86
   // intrinsic to the LLVM intrinsic to allow target-independent optimizations.
-  if (Value *BoolMask = getBoolVecFromMask(Mask, IC.getDataLayout())) {
+  if (Value *BoolMask = getBoolVecFromMask(Mask)) {
     unsigned AddrSpace = cast<PointerType>(Ptr->getType())->getAddressSpace();
     PointerType *VecPtrTy = PointerType::get(Vec->getType(), AddrSpace);
     Value *PtrCast = IC.Builder.CreateBitCast(Ptr, VecPtrTy, "castvec");
@@ -2689,8 +2688,7 @@ X86TTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
 
     // Constant Mask - select 1st/2nd argument lane based on top bit of mask.
     if (auto *ConstantMask = dyn_cast<ConstantDataVector>(Mask)) {
-      Constant *NewSelector =
-          getNegativeIsTrueBoolVec(ConstantMask, IC.getDataLayout());
+      Constant *NewSelector = getNegativeIsTrueBoolVec(ConstantMask);
       return SelectInst::Create(NewSelector, Op1, Op0, "blendv");
     }
 

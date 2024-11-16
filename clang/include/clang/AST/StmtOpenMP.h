@@ -6109,8 +6109,6 @@ public:
 class OMPTargetTeamsGenericLoopDirective final : public OMPLoopDirective {
   friend class ASTStmtReader;
   friend class OMPExecutableDirective;
-  /// true if loop directive's associated loop can be a parallel for.
-  bool CanBeParallelFor = false;
   /// Build directive with the given start and end location.
   ///
   /// \param StartLoc Starting location of the directive kind.
@@ -6133,9 +6131,6 @@ class OMPTargetTeamsGenericLoopDirective final : public OMPLoopDirective {
                          llvm::omp::OMPD_target_teams_loop, SourceLocation(),
                          SourceLocation(), CollapsedNum) {}
 
-  /// Set whether associated loop can be a parallel for.
-  void setCanBeParallelFor(bool ParFor) { CanBeParallelFor = ParFor; }
-
 public:
   /// Creates directive with a list of \p Clauses.
   ///
@@ -6150,7 +6145,7 @@ public:
   static OMPTargetTeamsGenericLoopDirective *
   Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
          unsigned CollapsedNum, ArrayRef<OMPClause *> Clauses,
-         Stmt *AssociatedStmt, const HelperExprs &Exprs, bool CanBeParallelFor);
+         Stmt *AssociatedStmt, const HelperExprs &Exprs);
 
   /// Creates an empty directive with the place
   /// for \a NumClauses clauses.
@@ -6163,10 +6158,6 @@ public:
                                                          unsigned NumClauses,
                                                          unsigned CollapsedNum,
                                                          EmptyShell);
-
-  /// Return true if current loop directive's associated loop can be a
-  /// parallel for.
-  bool canBeParallelFor() const { return CanBeParallelFor; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == OMPTargetTeamsGenericLoopDirectiveClass;

@@ -2,7 +2,6 @@ set(LLVM_LINK_COMPONENTS
   support
   AllTargetsInfos
   FrontendOpenMP
-  TargetParser
   )
 
 if(CLANG_BUILT_STANDALONE)

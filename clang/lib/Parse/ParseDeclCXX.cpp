@@ -140,14 +140,6 @@ Parser::DeclGroupPtrTy Parser::ParseNamespace(DeclaratorContext Context,
       SkipUntil(tok::semi);
       return nullptr;
     }
-    if (!ExtraNSs.empty()) {
-      Diag(ExtraNSs.front().NamespaceLoc,
-           diag::err_unexpected_qualified_namespace_alias)
-          << SourceRange(ExtraNSs.front().NamespaceLoc,
-                         ExtraNSs.back().IdentLoc);
-      SkipUntil(tok::semi);
-      return nullptr;
-    }
     if (attrLoc.isValid())
       Diag(attrLoc, diag::err_unexpected_namespace_attributes_alias);
     if (InlineLoc.isValid())
@@ -616,7 +608,7 @@ bool Parser::ParseUsingDeclarator(DeclaratorContext Context,
   }
 
   // Parse nested-name-specifier.
-  const IdentifierInfo *LastII = nullptr;
+  IdentifierInfo *LastII = nullptr;
   if (ParseOptionalCXXScopeSpecifier(D.SS, /*ObjectType=*/nullptr,
                                      /*ObjectHasErrors=*/false,
                                      /*EnteringContext=*/false,
@@ -799,11 +791,6 @@ Parser::DeclGroupPtrTy Parser::ParseUsingDeclaration(
     ProhibitAttributes(PrefixAttrs);
 
     Decl *DeclFromDeclSpec = nullptr;
-    Scope *CurScope = getCurScope();
-    if (CurScope)
-      CurScope->setFlags(Scope::ScopeFlags::TypeAliasScope |
-                         CurScope->getFlags());
-
     Decl *AD = ParseAliasDeclarationAfterDeclarator(
         TemplateInfo, UsingLoc, D, DeclEnd, AS, Attrs, &DeclFromDeclSpec);
     return Actions.ConvertDeclToDeclGroup(AD, DeclFromDeclSpec);
@@ -1507,15 +1494,6 @@ void Parser::ParseMicrosoftInheritanceClassAttributes(ParsedAttributes &attrs) {
   }
 }
 
-void Parser::ParseNullabilityClassAttributes(ParsedAttributes &attrs) {
-  while (Tok.is(tok::kw__Nullable)) {
-    IdentifierInfo *AttrName = Tok.getIdentifierInfo();
-    auto Kind = Tok.getKind();
-    SourceLocation AttrNameLoc = ConsumeToken();
-    attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0, Kind);
-  }
-}
-
 /// Determine whether the following tokens are valid after a type-specifier
 /// which could be a standalone declaration. This will conservatively return
 /// true if there's any doubt, and is appropriate for insert-';' fixits.
@@ -1697,21 +1675,15 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
 
   ParsedAttributes attrs(AttrFactory);
   // If attributes exist after tag, parse them.
-  for (;;) {
-    MaybeParseAttributes(PAKM_CXX11 | PAKM_Declspec | PAKM_GNU, attrs);
-    // Parse inheritance specifiers.
-    if (Tok.isOneOf(tok::kw___single_inheritance,
-                    tok::kw___multiple_inheritance,
-                    tok::kw___virtual_inheritance)) {
-      ParseMicrosoftInheritanceClassAttributes(attrs);
-      continue;
-    }
-    if (Tok.is(tok::kw__Nullable)) {
-      ParseNullabilityClassAttributes(attrs);
-      continue;
-    }
-    break;
-  }
+  MaybeParseAttributes(PAKM_CXX11 | PAKM_Declspec | PAKM_GNU, attrs);
+
+  // Parse inheritance specifiers.
+  if (Tok.isOneOf(tok::kw___single_inheritance, tok::kw___multiple_inheritance,
+                  tok::kw___virtual_inheritance))
+    ParseMicrosoftInheritanceClassAttributes(attrs);
+
+  // Allow attributes to precede or succeed the inheritance specifiers.
+  MaybeParseAttributes(PAKM_CXX11 | PAKM_Declspec | PAKM_GNU, attrs);
 
   // Source location used by FIXIT to insert misplaced
   // C++11 attributes
@@ -1779,8 +1751,9 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
           tok::kw___is_union,
           tok::kw___is_unsigned,
           tok::kw___is_void,
-          tok::kw___is_volatile
-      ))
+          tok::kw___is_volatile,
+          tok::kw___reference_binds_to_temporary,
+          tok::kw___reference_constructs_from_temporary))
     // GNU libstdc++ 4.2 and libc++ use certain intrinsic names as the
     // name of struct templates, but some are keywords in GCC >= 4.3
     // and Clang. Therefore, when we see the token sequence "struct
@@ -2096,7 +2069,7 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
   TypeResult TypeResult = true;      // invalid
 
   bool Owned = false;
-  SkipBodyInfo SkipBody;
+  Sema::SkipBodyInfo SkipBody;
   if (TemplateId) {
     // Explicit specialization, class template partial specialization,
     // or explicit instantiation.
@@ -3401,7 +3374,6 @@ ExprResult Parser::ParseCXXMemberInitializer(Decl *D, bool IsFunction,
               << 1 /* delete */;
         else
           Diag(ConsumeToken(), diag::err_deleted_non_function);
-        SkipDeletedFunctionBody();
         return ExprError();
       }
     } else if (Tok.is(tok::kw_default)) {

@@ -31,16 +31,9 @@ AST_MATCHER_P(FunctionDecl, isInstantiatedFrom, Matcher<FunctionDecl>,
                               Finder, Builder);
 }
 
-constexpr std::initializer_list<OverloadedOperatorKind>
-    AssignmentOverloadedOperatorKinds = {
-        OO_Equal,      OO_PlusEqual,     OO_MinusEqual,          OO_StarEqual,
-        OO_SlashEqual, OO_PercentEqual,  OO_CaretEqual,          OO_AmpEqual,
-        OO_PipeEqual,  OO_LessLessEqual, OO_GreaterGreaterEqual, OO_PlusPlus,
-        OO_MinusMinus};
-
-AST_MATCHER(FunctionDecl, isAssignmentOverloadedOperator) {
-  return llvm::is_contained(AssignmentOverloadedOperatorKinds,
-                            Node.getOverloadedOperator());
+AST_MATCHER_P(CXXMethodDecl, isOperatorOverloading,
+              llvm::SmallVector<OverloadedOperatorKind>, Kinds) {
+  return llvm::is_contained(Kinds, Node.getOverloadedOperator());
 }
 } // namespace
 
@@ -171,18 +164,22 @@ void UnusedReturnValueCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
 }
 
 void UnusedReturnValueCheck::registerMatchers(MatchFinder *Finder) {
-  auto MatchedDirectCallExpr =
-      expr(callExpr(callee(functionDecl(
-                        // Don't match copy or move assignment operator.
-                        unless(isAssignmentOverloadedOperator()),
-                        // Don't match void overloads of checked functions.
-                        unless(returns(voidType())),
-                        anyOf(isInstantiatedFrom(matchers::matchesAnyListedName(
-                                  CheckedFunctions)),
-                              returns(hasCanonicalType(hasDeclaration(
-                                  namedDecl(matchers::matchesAnyListedName(
-                                      CheckedReturnTypes)))))))))
-               .bind("match"));
+  auto MatchedDirectCallExpr = expr(
+      callExpr(
+          callee(functionDecl(
+              // Don't match void overloads of checked functions.
+              unless(returns(voidType())),
+              // Don't match copy or move assignment operator.
+              unless(cxxMethodDecl(isOperatorOverloading(
+                  {OO_Equal, OO_PlusEqual, OO_MinusEqual, OO_StarEqual,
+                   OO_SlashEqual, OO_PercentEqual, OO_CaretEqual, OO_AmpEqual,
+                   OO_PipeEqual, OO_LessLessEqual, OO_GreaterGreaterEqual}))),
+              anyOf(
+                  isInstantiatedFrom(
+                      matchers::matchesAnyListedName(CheckedFunctions)),
+                  returns(hasCanonicalType(hasDeclaration(namedDecl(
+                      matchers::matchesAnyListedName(CheckedReturnTypes)))))))))
+          .bind("match"));
 
   auto CheckCastToVoid =
       AllowCastToVoid ? castExpr(unless(hasCastKind(CK_ToVoid))) : castExpr();

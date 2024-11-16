@@ -296,5 +296,3 @@ def : ReadAdvance<ReadAtomicHD, 0>;
 // Include the scheduler resources for other instruction extensions.
 include "RISCVScheduleZb.td"
 include "RISCVScheduleV.td"
-include "RISCVScheduleXSf.td"
-include "RISCVScheduleZvk.td"

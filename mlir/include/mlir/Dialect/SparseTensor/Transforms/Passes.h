@@ -60,10 +60,9 @@ enum class SparseEmitStrategy {
 // The SparseAssembler pass.
 //===----------------------------------------------------------------------===//
 
-void populateSparseAssembler(RewritePatternSet &patterns, bool directOut);
+void populateSparseAssembler(RewritePatternSet &patterns);
 
 std::unique_ptr<Pass> createSparseAssembler();
-std::unique_ptr<Pass> createSparseAssembler(bool directOut);
 
 //===----------------------------------------------------------------------===//
 // The SparseReinterpretMap pass.

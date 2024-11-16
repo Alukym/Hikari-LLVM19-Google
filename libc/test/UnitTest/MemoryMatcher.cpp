@@ -10,8 +10,6 @@
 
 #include "test/UnitTest/Test.h"
 
-#if LIBC_TEST_HAS_MATCHERS()
-
 using LIBC_NAMESPACE::testing::tlog;
 
 namespace LIBC_NAMESPACE {
@@ -78,5 +76,3 @@ void MemoryMatcher::explainError() {
 
 } // namespace testing
 } // namespace LIBC_NAMESPACE
-
-#endif // LIBC_TEST_HAS_MATCHERS()

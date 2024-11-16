@@ -106,13 +106,13 @@ bool lldb_private::formatters::LibcxxFunctionSummaryProvider(
   case CPPLanguageRuntime::LibCppStdFunctionCallableCase::Lambda:
     stream.Printf(
         " Lambda in File %s at Line %u",
-        callable_info.callable_line_entry.GetFile().GetFilename().GetCString(),
+        callable_info.callable_line_entry.file.GetFilename().GetCString(),
         callable_info.callable_line_entry.line);
     break;
   case CPPLanguageRuntime::LibCppStdFunctionCallableCase::CallableObject:
     stream.Printf(
         " Function in File %s at Line %u",
-        callable_info.callable_line_entry.GetFile().GetFilename().GetCString(),
+        callable_info.callable_line_entry.file.GetFilename().GetCString(),
         callable_info.callable_line_entry.line);
     break;
   case CPPLanguageRuntime::LibCppStdFunctionCallableCase::FreeOrMemberFunction:
@@ -1087,10 +1087,8 @@ bool lldb_private::formatters::LibcxxWStringViewSummaryProvider(
                                         dataobj, size);
 }
 
-static bool
-LibcxxChronoTimePointSecondsSummaryProvider(ValueObject &valobj, Stream &stream,
-                                            const TypeSummaryOptions &options,
-                                            const char *fmt) {
+bool lldb_private::formatters::LibcxxChronoSysSecondsSummaryProvider(
+    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
   ValueObjectSP ptr_sp = valobj.GetChildMemberWithName("__d_");
   if (!ptr_sp)
     return false;
@@ -1114,7 +1112,7 @@ LibcxxChronoTimePointSecondsSummaryProvider(ValueObject &valobj, Stream &stream,
   else {
     std::array<char, 128> str;
     std::size_t size =
-        std::strftime(str.data(), str.size(), fmt, gmtime(&seconds));
+        std::strftime(str.data(), str.size(), "%FT%H:%M:%SZ", gmtime(&seconds));
     if (size == 0)
       return false;
 
@@ -1125,22 +1123,8 @@ LibcxxChronoTimePointSecondsSummaryProvider(ValueObject &valobj, Stream &stream,
   return true;
 }
 
-bool lldb_private::formatters::LibcxxChronoSysSecondsSummaryProvider(
+bool lldb_private::formatters::LibcxxChronoSysDaysSummaryProvider(
     ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
-  return LibcxxChronoTimePointSecondsSummaryProvider(valobj, stream, options,
-                                                     "%FT%H:%M:%SZ");
-}
-
-bool lldb_private::formatters::LibcxxChronoLocalSecondsSummaryProvider(
-    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
-  return LibcxxChronoTimePointSecondsSummaryProvider(valobj, stream, options,
-                                                     "%FT%H:%M:%S");
-}
-
-static bool
-LibcxxChronoTimepointDaysSummaryProvider(ValueObject &valobj, Stream &stream,
-                                         const TypeSummaryOptions &options,
-                                         const char *fmt) {
   ValueObjectSP ptr_sp = valobj.GetChildMemberWithName("__d_");
   if (!ptr_sp)
     return false;
@@ -1164,7 +1148,7 @@ LibcxxChronoTimepointDaysSummaryProvider(ValueObject &valobj, Stream &stream,
 
     std::array<char, 128> str;
     std::size_t size =
-        std::strftime(str.data(), str.size(), fmt, gmtime(&seconds));
+        std::strftime(str.data(), str.size(), "%FZ", gmtime(&seconds));
     if (size == 0)
       return false;
 
@@ -1172,18 +1156,6 @@ LibcxxChronoTimepointDaysSummaryProvider(ValueObject &valobj, Stream &stream,
   }
 
   return true;
-}
-
-bool lldb_private::formatters::LibcxxChronoSysDaysSummaryProvider(
-    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
-  return LibcxxChronoTimepointDaysSummaryProvider(valobj, stream, options,
-                                                  "%FZ");
-}
-
-bool lldb_private::formatters::LibcxxChronoLocalDaysSummaryProvider(
-    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
-  return LibcxxChronoTimepointDaysSummaryProvider(valobj, stream, options,
-                                                  "%F");
 }
 
 bool lldb_private::formatters::LibcxxChronoMonthSummaryProvider(
@@ -1220,7 +1192,7 @@ bool lldb_private::formatters::LibcxxChronoWeekdaySummaryProvider(
     return false;
 
   const unsigned weekday = ptr_sp->GetValueAsUnsigned(0);
-  if (weekday < 7)
+  if (weekday >= 0 && weekday < 7)
     stream << "weekday=" << weekdays[weekday];
   else
     stream.Printf("weekday=%u", weekday);

@@ -53,8 +53,6 @@ sub canon_arch($) {
 			$arch = "ppc64le";
         } elsif ( $arch =~ m{\Appc64} ) {
         	$arch = "ppc64";
-        } elsif ( $arch =~ m{\Aaarch64_32} ) {
-                $arch = "aarch64_32";
         } elsif ( $arch =~ m{\Aaarch64} ) {
                 $arch = "aarch64";
         } elsif ( $arch =~ m{\Amic} ) {
@@ -99,7 +97,6 @@ sub canon_mic_arch($) {
         "32e" => "Intel(R) 64",
         "arm" => "ARM",
         "aarch64" => "AArch64",
-        "aarch64_32" => "AArch64_32",
         "loongarch64" => "LoongArch64",
         "mic" => "Intel(R) Many Integrated Core Architecture",
         "mips" => "MIPS",
@@ -225,8 +222,6 @@ sub target_options() {
         $_host_arch = "ppc64le";
     } elsif ( $hardware_platform eq "ppc64" ) {
         $_host_arch = "ppc64";
-    } elsif ( $hardware_platform eq "aarch64_32" ) {
-        $_host_arch = "aarch64_32";
     } elsif ( $hardware_platform eq "aarch64" ) {
         $_host_arch = "aarch64";
     } elsif ( $hardware_platform eq "mips64" ) {

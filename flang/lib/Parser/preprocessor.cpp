@@ -6,8 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "flang/Parser/preprocessor.h"
-
+#include "preprocessor.h"
 #include "prescan.h"
 #include "flang/Common/idioms.h"
 #include "flang/Parser/characters.h"
@@ -22,7 +21,6 @@
 #include <optional>
 #include <set>
 #include <utility>
-#include <vector>
 
 namespace Fortran::parser {
 
@@ -33,7 +31,8 @@ Definition::Definition(
 Definition::Definition(const std::vector<std::string> &argNames,
     const TokenSequence &repl, std::size_t firstToken, std::size_t tokens,
     bool isVariadic)
-    : isFunctionLike_{true}, isVariadic_{isVariadic}, argNames_{argNames},
+    : isFunctionLike_{true},
+      argumentCount_(argNames.size()), isVariadic_{isVariadic},
       replacement_{Tokenize(argNames, repl, firstToken, tokens)} {}
 
 Definition::Definition(const std::string &predefined, AllSources &sources)
@@ -45,37 +44,6 @@ bool Definition::set_isDisabled(bool disable) {
   bool was{isDisabled_};
   isDisabled_ = disable;
   return was;
-}
-
-void Definition::Print(llvm::raw_ostream &out, const char *macroName) const {
-  if (!isFunctionLike_) {
-    // If it's not a function-like macro, then just print the replacement.
-    out << ' ' << replacement_.ToString();
-    return;
-  }
-
-  size_t argCount{argumentCount()};
-
-  out << '(';
-  for (size_t i{0}; i != argCount; ++i) {
-    if (i != 0) {
-      out << ", ";
-    }
-    out << argNames_[i];
-  }
-  if (isVariadic_) {
-    out << ", ...";
-  }
-  out << ") ";
-
-  for (size_t i{0}, e{replacement_.SizeInTokens()}; i != e; ++i) {
-    std::string tok{replacement_.TokenAt(i).ToString()};
-    if (size_t idx{GetArgumentIndex(tok)}; idx < argCount) {
-      out << argNames_[idx];
-    } else {
-      out << tok;
-    }
-  }
 }
 
 static bool IsLegalIdentifierStart(const CharBlock &cpl) {
@@ -103,13 +71,6 @@ TokenSequence Definition::Tokenize(const std::vector<std::string> &argNames,
     result.Put(token, firstToken + j, 1);
   }
   return result;
-}
-
-std::size_t Definition::GetArgumentIndex(const CharBlock &token) const {
-  if (token.size() >= 2 && token[0] == '~') {
-    return static_cast<size_t>(token[1] - 'A');
-  }
-  return argumentCount();
 }
 
 static TokenSequence Stringify(
@@ -198,7 +159,7 @@ TokenSequence Definition::Apply(
       continue;
     }
     if (bytes == 2 && token[0] == '~') { // argument substitution
-      std::size_t index{GetArgumentIndex(token)};
+      std::size_t index = token[1] - 'A';
       if (index >= args.size()) {
         continue;
       }
@@ -241,8 +202,8 @@ TokenSequence Definition::Apply(
       Provenance commaProvenance{
           prescanner.preprocessor().allSources().CompilerInsertionProvenance(
               ',')};
-      for (std::size_t k{argumentCount()}; k < args.size(); ++k) {
-        if (k > argumentCount()) {
+      for (std::size_t k{argumentCount_}; k < args.size(); ++k) {
+        if (k > argumentCount_) {
           result.Put(","s, commaProvenance);
         }
         result.Put(args[k]);
@@ -251,7 +212,7 @@ TokenSequence Definition::Apply(
         j + 2 < tokens && replacement_.TokenAt(j + 1).OnlyNonBlank() == '(' &&
         parenthesesNesting == 0) {
       parenthesesNesting = 1;
-      skipping = args.size() == argumentCount();
+      skipping = args.size() == argumentCount_;
       ++j;
     } else {
       if (parenthesesNesting > 0) {
@@ -593,11 +554,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
           "# missing or invalid name"_err_en_US);
     } else {
       if (dir.IsAnythingLeft(++j)) {
-        if (prescanner.features().ShouldWarn(
-                common::UsageWarning::Portability)) {
-          prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-              "#undef: excess tokens at end of directive"_port_en_US);
-        }
+        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+            "#undef: excess tokens at end of directive"_port_en_US);
       } else {
         definitions_.erase(nameToken);
       }
@@ -610,11 +568,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
           "#%s: missing name"_err_en_US, dirName);
     } else {
       if (dir.IsAnythingLeft(++j)) {
-        if (prescanner.features().ShouldWarn(
-                common::UsageWarning::Portability)) {
-          prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-              "#%s: excess tokens at end of directive"_port_en_US, dirName);
-        }
+        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+            "#%s: excess tokens at end of directive"_port_en_US, dirName);
       }
       doThen = IsNameDefined(nameToken) == (dirName == "ifdef");
     }
@@ -633,10 +588,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
     }
   } else if (dirName == "else") {
     if (dir.IsAnythingLeft(j)) {
-      if (prescanner.features().ShouldWarn(common::UsageWarning::Portability)) {
-        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-            "#else: excess tokens at end of directive"_port_en_US);
-      }
+      prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+          "#else: excess tokens at end of directive"_port_en_US);
     } else if (ifStack_.empty()) {
       prescanner.Say(dir.GetTokenProvenanceRange(dirOffset),
           "#else: not nested within #if, #ifdef, or #ifndef"_err_en_US);
@@ -662,10 +615,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
     }
   } else if (dirName == "endif") {
     if (dir.IsAnythingLeft(j)) {
-      if (prescanner.features().ShouldWarn(common::UsageWarning::Portability)) {
-        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-            "#endif: excess tokens at end of directive"_port_en_US);
-      }
+      prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+          "#endif: excess tokens at end of directive"_port_en_US);
     } else if (ifStack_.empty()) {
       prescanner.Say(dir.GetTokenProvenanceRange(dirOffset),
           "#endif: no #if, #ifdef, or #ifndef"_err_en_US);
@@ -712,11 +663,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
         ++k;
       }
       if (k >= pathTokens) {
-        if (prescanner.features().ShouldWarn(
-                common::UsageWarning::Portability)) {
-          prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-              "#include: expected '>' at end of included file"_port_en_US);
-        }
+        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+            "#include: expected '>' at end of included file"_port_en_US);
       }
       TokenSequence braced{path, 1, k - 1};
       include = braced.ToString();
@@ -742,10 +690,8 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
     }
     k = path.SkipBlanks(k + 1);
     if (k < pathTokens && path.TokenAt(k).ToString() != "!") {
-      if (prescanner.features().ShouldWarn(common::UsageWarning::Portability)) {
-        prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
-            "#include: extra stuff ignored after file name"_port_en_US);
-      }
+      prescanner.Say(dir.GetIntervalProvenanceRange(j, tokens - j),
+          "#include: extra stuff ignored after file name"_port_en_US);
     }
     std::string buf;
     llvm::raw_string_ostream error{buf};
@@ -764,21 +710,6 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
   } else {
     prescanner.Say(dir.GetTokenProvenanceRange(dirOffset),
         "#%s: unknown or unimplemented directive"_err_en_US, dirName);
-  }
-}
-
-void Preprocessor::PrintMacros(llvm::raw_ostream &out) const {
-  // std::set is ordered. Use that to print the macros in an
-  // alphabetical order.
-  std::set<std::string> macroNames;
-  for (const auto &[name, _] : definitions_) {
-    macroNames.insert(name.ToString());
-  }
-
-  for (const std::string &name : macroNames) {
-    out << "#define " << name;
-    definitions_.at(name).Print(out, name.c_str());
-    out << '\n';
   }
 }
 

@@ -1,9 +1,7 @@
 ! This test checks lowering of OpenMP IF clauses.
 
-! The "if" clause was added to the "simd" directive in OpenMP 5.0, and
-! to the "teams" directive in OpenMP 5.2.
-! RUN: bbc -fopenmp -fopenmp-version=52 -emit-hlfir %s -o - | FileCheck %s
-! RUN: %flang_fc1 -fopenmp -fopenmp-version=52 -emit-hlfir %s -o - | FileCheck %s
+! RUN: bbc -fopenmp -emit-hlfir %s -o - | FileCheck %s
+! RUN: %flang_fc1 -fopenmp -emit-hlfir %s -o - | FileCheck %s
 
 program main
   integer :: i
@@ -118,7 +116,7 @@ program main
   do i = 1, 10
   end do
   !$omp end parallel do simd
-
+  
   ! CHECK:      omp.parallel
   ! CHECK-SAME: if({{.*}})
   ! CHECK:      omp.wsloop
@@ -126,7 +124,7 @@ program main
   do i = 1, 10
   end do
   !$omp end parallel do simd
-
+  
   ! CHECK:      omp.parallel
   ! CHECK-SAME: if({{.*}})
   ! CHECK:      omp.wsloop
@@ -136,7 +134,7 @@ program main
   do i = 1, 10
   end do
   !$omp end parallel do simd
-
+  
   ! CHECK:      omp.parallel
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
@@ -149,7 +147,7 @@ program main
   ! ----------------------------------------------------------------------------
   ! SIMD
   ! ----------------------------------------------------------------------------
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
   !$omp simd
@@ -157,14 +155,14 @@ program main
   end do
   !$omp end simd
 
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-SAME: if({{.*}})
   !$omp simd if(.true.)
   do i = 1, 10
   end do
   !$omp end simd
 
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-SAME: if({{.*}})
   !$omp simd if(simd: .true.)
   do i = 1, 10
@@ -283,6 +281,7 @@ program main
   end do
   !$omp end target parallel do
 
+  
   ! CHECK:      omp.target
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
@@ -361,7 +360,7 @@ program main
   ! CHECK:      omp.target
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
   !$omp target simd
@@ -371,7 +370,7 @@ program main
 
   ! CHECK:      omp.target
   ! CHECK-SAME: if({{.*}})
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-SAME: if({{.*}})
   !$omp target simd if(.true.)
   do i = 1, 10
@@ -380,7 +379,7 @@ program main
 
   ! CHECK:      omp.target
   ! CHECK-SAME: if({{.*}})
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-SAME: if({{.*}})
   !$omp target simd if(target: .true.) if(simd: .false.)
   do i = 1, 10
@@ -389,7 +388,7 @@ program main
 
   ! CHECK:      omp.target
   ! CHECK-SAME: if({{.*}})
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
   !$omp target simd if(target: .true.)
@@ -400,7 +399,7 @@ program main
   ! CHECK:      omp.target
   ! CHECK-NOT:  if({{.*}})
   ! CHECK-SAME: {
-  ! CHECK:      omp.simd
+  ! CHECK:      omp.simdloop
   ! CHECK-SAME: if({{.*}})
   !$omp target simd if(simd: .true.)
   do i = 1, 10

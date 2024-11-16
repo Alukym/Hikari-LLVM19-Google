@@ -22,7 +22,7 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/Analysis/CFG.h"
-#include "clang/Analysis/FlowSensitive/AdornedCFG.h"
+#include "clang/Analysis/FlowSensitive/ControlFlowContext.h"
 #include "clang/Analysis/FlowSensitive/DataflowEnvironment.h"
 #include "clang/Analysis/FlowSensitive/DataflowLattice.h"
 #include "clang/Analysis/FlowSensitive/MatchSwitch.h"
@@ -195,7 +195,8 @@ template <typename AnalysisT>
 llvm::Expected<std::vector<
     std::optional<DataflowAnalysisState<typename AnalysisT::Lattice>>>>
 runDataflowAnalysis(
-    const AdornedCFG &ACFG, AnalysisT &Analysis, const Environment &InitEnv,
+    const ControlFlowContext &CFCtx, AnalysisT &Analysis,
+    const Environment &InitEnv,
     std::function<void(const CFGElement &, const DataflowAnalysisState<
                                                typename AnalysisT::Lattice> &)>
         PostVisitCFG = nullptr,
@@ -217,7 +218,7 @@ runDataflowAnalysis(
   }
 
   auto TypeErasedBlockStates = runTypeErasedDataflowAnalysis(
-      ACFG, Analysis, InitEnv, PostVisitCFGClosure, MaxBlockVisits);
+      CFCtx, Analysis, InitEnv, PostVisitCFGClosure, MaxBlockVisits);
   if (!TypeErasedBlockStates)
     return TypeErasedBlockStates.takeError();
 
@@ -279,12 +280,14 @@ llvm::Expected<llvm::SmallVector<Diagnostic>> diagnoseFunction(
         Diagnoser,
     std::int64_t MaxSATIterations = 1'000'000'000,
     std::int32_t MaxBlockVisits = 20'000) {
-  llvm::Expected<AdornedCFG> Context = AdornedCFG::build(FuncDecl);
+  llvm::Expected<ControlFlowContext> Context =
+      ControlFlowContext::build(FuncDecl);
   if (!Context)
     return Context.takeError();
 
-  auto Solver = std::make_unique<WatchedLiteralsSolver>(MaxSATIterations);
-  DataflowAnalysisContext AnalysisContext(*Solver);
+  auto OwnedSolver = std::make_unique<WatchedLiteralsSolver>(MaxSATIterations);
+  const WatchedLiteralsSolver *Solver = OwnedSolver.get();
+  DataflowAnalysisContext AnalysisContext(std::move(OwnedSolver));
   Environment Env(AnalysisContext, FuncDecl);
   AnalysisT Analysis = createAnalysis<AnalysisT>(ASTCtx, Env);
   llvm::SmallVector<Diagnostic> Diagnostics;

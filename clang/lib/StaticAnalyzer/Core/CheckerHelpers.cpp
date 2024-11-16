@@ -183,9 +183,10 @@ OperatorKind operationKindFromOverloadedOperator(OverloadedOperatorKind OOK,
   }
 }
 
-std::optional<SVal> getPointeeVal(SVal PtrSVal, ProgramStateRef State) {
+std::optional<DefinedSVal> getPointeeDefVal(SVal PtrSVal,
+                                            ProgramStateRef State) {
   if (const auto *Ptr = PtrSVal.getAsRegion()) {
-    return State->getSVal(Ptr);
+    return State->getSVal(Ptr).getAs<DefinedSVal>();
   }
   return std::nullopt;
 }

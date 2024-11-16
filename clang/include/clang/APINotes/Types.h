@@ -675,11 +675,6 @@ class TagInfo : public CommonTypeInfo {
   LLVM_PREFERRED_TYPE(bool)
   unsigned IsFlagEnum : 1;
 
-  LLVM_PREFERRED_TYPE(bool)
-  unsigned SwiftCopyableSpecified : 1;
-  LLVM_PREFERRED_TYPE(bool)
-  unsigned SwiftCopyable : 1;
-
 public:
   std::optional<std::string> SwiftImportAs;
   std::optional<std::string> SwiftRetainOp;
@@ -687,9 +682,7 @@ public:
 
   std::optional<EnumExtensibilityKind> EnumExtensibility;
 
-  TagInfo()
-      : HasFlagEnum(0), IsFlagEnum(0), SwiftCopyableSpecified(false),
-        SwiftCopyable(false) {}
+  TagInfo() : HasFlagEnum(0), IsFlagEnum(0) {}
 
   std::optional<bool> isFlagEnum() const {
     if (HasFlagEnum)
@@ -699,15 +692,6 @@ public:
   void setFlagEnum(std::optional<bool> Value) {
     HasFlagEnum = Value.has_value();
     IsFlagEnum = Value.value_or(false);
-  }
-
-  std::optional<bool> isSwiftCopyable() const {
-    return SwiftCopyableSpecified ? std::optional<bool>(SwiftCopyable)
-                                  : std::nullopt;
-  }
-  void setSwiftCopyable(std::optional<bool> Value) {
-    SwiftCopyableSpecified = Value.has_value();
-    SwiftCopyable = Value.value_or(false);
   }
 
   TagInfo &operator|=(const TagInfo &RHS) {
@@ -726,9 +710,6 @@ public:
     if (!EnumExtensibility)
       EnumExtensibility = RHS.EnumExtensibility;
 
-    if (!SwiftCopyableSpecified)
-      setSwiftCopyable(RHS.isSwiftCopyable());
-
     return *this;
   }
 
@@ -743,7 +724,6 @@ inline bool operator==(const TagInfo &LHS, const TagInfo &RHS) {
          LHS.SwiftRetainOp == RHS.SwiftRetainOp &&
          LHS.SwiftReleaseOp == RHS.SwiftReleaseOp &&
          LHS.isFlagEnum() == RHS.isFlagEnum() &&
-         LHS.isSwiftCopyable() == RHS.isSwiftCopyable() &&
          LHS.EnumExtensibility == RHS.EnumExtensibility;
 }
 

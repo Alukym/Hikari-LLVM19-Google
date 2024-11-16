@@ -31,7 +31,6 @@ if(TARGET libc.src.__support.threads.${LIBC_TARGET_OS}.mutex)
       fork_callbacks.h
     DEPENDS
       .mutex
-      libc.src.__support.CPP.mutex
   )
 endif()
 
@@ -58,7 +57,6 @@ if(TARGET libc.src.__support.threads.${LIBC_TARGET_OS}.thread)
       libc.src.__support.common
       libc.src.__support.fixedvector
       libc.src.__support.CPP.array
-      libc.src.__support.CPP.mutex
       libc.src.__support.CPP.optional
   )
 endif()

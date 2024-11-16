@@ -3123,7 +3123,7 @@ bool IEEEFloat::convertFromStringSpecials(StringRef str) {
   if (str.size() < MIN_NAME_SIZE)
     return false;
 
-  if (str == "inf" || str == "INFINITY" || str == "+Inf") {
+  if (str.equals("inf") || str.equals("INFINITY") || str.equals("+Inf")) {
     makeInf(false);
     return true;
   }
@@ -3134,7 +3134,7 @@ bool IEEEFloat::convertFromStringSpecials(StringRef str) {
     if (str.size() < MIN_NAME_SIZE)
       return false;
 
-    if (str == "inf" || str == "INFINITY" || str == "Inf") {
+    if (str.equals("inf") || str.equals("INFINITY") || str.equals("Inf")) {
       makeInf(true);
       return true;
     }

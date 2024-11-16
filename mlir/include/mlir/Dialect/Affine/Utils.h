@@ -13,7 +13,6 @@
 #ifndef MLIR_DIALECT_AFFINE_UTILS_H
 #define MLIR_DIALECT_AFFINE_UTILS_H
 
-#include "mlir/Analysis/AliasAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/OpDefinition.h"
@@ -107,8 +106,7 @@ struct VectorizationStrategy {
 /// loads and eliminate invariant affine loads; consequently, eliminate dead
 /// allocs.
 void affineScalarReplace(func::FuncOp f, DominanceInfo &domInfo,
-                         PostDominanceInfo &postDomInfo,
-                         AliasAnalysis &analysis);
+                         PostDominanceInfo &postDomInfo);
 
 /// Vectorizes affine loops in 'loops' using the n-D vectorization factors in
 /// 'vectorSizes'. By default, each vectorization factor is applied
@@ -327,8 +325,7 @@ OpFoldResult linearizeIndex(ArrayRef<OpFoldResult> multiIndex,
 /// will check if there is no write to the memory between `start` and `memOp`
 /// that would change the read within `memOp`.
 template <typename EffectType, typename T>
-bool hasNoInterveningEffect(Operation *start, T memOp,
-                            llvm::function_ref<bool(Value, Value)> mayAlias);
+bool hasNoInterveningEffect(Operation *start, T memOp);
 
 struct AffineValueExpr {
   explicit AffineValueExpr(AffineExpr e) : e(e) {}

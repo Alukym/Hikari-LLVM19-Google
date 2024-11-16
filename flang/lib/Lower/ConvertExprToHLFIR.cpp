@@ -130,16 +130,15 @@ public:
     // shape is deferred and should not be loaded now to preserve
     // pointer/allocatable aspects.
     if (componentSym.Rank() == 0 ||
-        Fortran::semantics::IsAllocatableOrObjectPointer(&componentSym) ||
-        Fortran::semantics::IsProcedurePointer(&componentSym))
+        Fortran::semantics::IsAllocatableOrObjectPointer(&componentSym))
       return mlir::Value{};
 
     fir::FirOpBuilder &builder = getBuilder();
     mlir::Location loc = getLoc();
     mlir::Type idxTy = builder.getIndexType();
     llvm::SmallVector<mlir::Value> extents;
-    auto seqTy = mlir::cast<fir::SequenceType>(
-        hlfir::getFortranElementOrSequenceType(fieldType));
+    auto seqTy = hlfir::getFortranElementOrSequenceType(fieldType)
+                     .cast<fir::SequenceType>();
     for (auto extent : seqTy.getShape()) {
       if (extent == fir::SequenceType::getUnknownExtent()) {
         // We have already generated invalid hlfir.declare
@@ -199,7 +198,7 @@ private:
                                    const T &designatorNode) {
     // Get base's shape if its a sequence type with no previously computed
     // result shape
-    if (partInfo.base && mlir::isa<fir::SequenceType>(resultValueType) &&
+    if (partInfo.base && resultValueType.isa<fir::SequenceType>() &&
         !partInfo.resultShape)
       partInfo.resultShape =
           hlfir::genShape(getLoc(), getBuilder(), *partInfo.base);
@@ -209,7 +208,7 @@ private:
       return fir::ClassType::get(resultValueType);
     // Character scalar with dynamic length needs a fir.boxchar to hold the
     // designator length.
-    auto charType = mlir::dyn_cast<fir::CharacterType>(resultValueType);
+    auto charType = resultValueType.dyn_cast<fir::CharacterType>();
     if (charType && charType.hasDynamicLen())
       return fir::BoxCharType::get(charType.getContext(), charType.getFKind());
     // Arrays with non default lower bounds or dynamic length or dynamic extent
@@ -218,7 +217,7 @@ private:
         hasNonDefaultLowerBounds(partInfo))
       return fir::BoxType::get(resultValueType);
     // Non simply contiguous ref require a fir.box to carry the byte stride.
-    if (mlir::isa<fir::SequenceType>(resultValueType) &&
+    if (resultValueType.isa<fir::SequenceType>() &&
         !Fortran::evaluate::IsSimplyContiguous(
             designatorNode, getConverter().getFoldingContext()))
       return fir::BoxType::get(resultValueType);
@@ -285,7 +284,7 @@ private:
         // value of the Cray pointer variable.
         fir::FirOpBuilder &builder = getBuilder();
         fir::FortranVariableOpInterface ptrVar =
-            gen(Fortran::semantics::GetCrayPointer(symbolRef));
+            gen(Fortran::lower::getCrayPointer(symbolRef));
         mlir::Value ptrAddr = ptrVar.getBase();
 
         // Reinterpret the reference to a Cray pointer so that
@@ -307,14 +306,7 @@ private:
       }
       return *varDef;
     }
-    llvm::errs() << *symbolRef << "\n";
     TODO(getLoc(), "lowering symbol to HLFIR");
-  }
-
-  fir::FortranVariableOpInterface
-  gen(const Fortran::semantics::Symbol &symbol) {
-    Fortran::evaluate::SymbolRef symref{symbol};
-    return gen(symref);
   }
 
   fir::FortranVariableOpInterface
@@ -398,8 +390,8 @@ private:
       partInfo.typeParams[0] =
           fir::factory::genMaxWithZero(builder, loc, rawLen);
     }
-    auto kind = mlir::cast<fir::CharacterType>(
-                    hlfir::getFortranElementType(baseStringType))
+    auto kind = hlfir::getFortranElementType(baseStringType)
+                    .cast<fir::CharacterType>()
                     .getFKind();
     auto newCharTy = fir::CharacterType::get(
         baseStringType.getContext(), kind,
@@ -579,7 +571,7 @@ private:
       return createVectorSubscriptElementAddrOp(partInfo, baseType,
                                                 resultExtents);
 
-    mlir::Type resultType = mlir::cast<fir::SequenceType>(baseType).getEleTy();
+    mlir::Type resultType = baseType.cast<fir::SequenceType>().getEleTy();
     if (!resultTypeShape.empty()) {
       // Ranked array section. The result shape comes from the array section
       // subscripts.
@@ -612,8 +604,8 @@ private:
   }
   static bool hasNonDefaultLowerBounds(const PartInfo &partInfo) {
     return partInfo.resultShape &&
-           mlir::isa<fir::ShiftType, fir::ShapeShiftType>(
-               partInfo.resultShape.getType());
+           (partInfo.resultShape.getType().isa<fir::ShiftType>() ||
+            partInfo.resultShape.getType().isa<fir::ShapeShiftType>());
   }
 
   mlir::Type visit(const Fortran::evaluate::Component &component,
@@ -705,7 +697,7 @@ private:
     const Fortran::semantics::Symbol &componentSym = component.GetLastSymbol();
     partInfo.componentName = converter.getRecordTypeFieldName(componentSym);
     auto recordType =
-        mlir::cast<fir::RecordType>(hlfir::getFortranElementType(baseType));
+        hlfir::getFortranElementType(baseType).cast<fir::RecordType>();
     if (recordType.isDependentType())
       TODO(getLoc(), "Designate derived type with length parameters in HLFIR");
     mlir::Type fieldType = recordType.getType(partInfo.componentName);
@@ -718,7 +710,7 @@ private:
     if (fir::isRecordWithTypeParameters(fieldEleType))
       TODO(loc,
            "lower a component that is a parameterized derived type to HLFIR");
-    if (auto charTy = mlir::dyn_cast<fir::CharacterType>(fieldEleType)) {
+    if (auto charTy = fieldEleType.dyn_cast<fir::CharacterType>()) {
       mlir::Location loc = getLoc();
       mlir::Type idxTy = builder.getIndexType();
       if (charTy.hasConstantLen())
@@ -811,7 +803,7 @@ private:
       }
     }
     builder.setInsertionPoint(elementalAddrOp);
-    return mlir::cast<fir::SequenceType>(baseType).getEleTy();
+    return baseType.cast<fir::SequenceType>().getEleTy();
   }
 
   /// Yield the designator for the final part-ref inside the
@@ -1665,7 +1657,7 @@ private:
     mlir::Location loc = getLoc();
     fir::FirOpBuilder &builder = getBuilder();
     mlir::Type ty = translateSomeExprToFIRType(converter, toEvExpr(ctor));
-    auto recTy = mlir::cast<fir::RecordType>(ty);
+    auto recTy = ty.cast<fir::RecordType>();
 
     if (recTy.isDependentType())
       TODO(loc, "structure constructor for derived type with length parameters "
@@ -1676,8 +1668,7 @@ private:
     mlir::Value storagePtr = builder.createTemporary(loc, recTy);
     auto varOp = hlfir::EntityWithAttributes{builder.create<hlfir::DeclareOp>(
         loc, storagePtr, "ctor.temp", /*shape=*/nullptr,
-        /*typeparams=*/mlir::ValueRange{}, /*dummy_scope=*/nullptr,
-        fir::FortranVariableFlagsAttr{})};
+        /*typeparams=*/mlir::ValueRange{}, fir::FortranVariableFlagsAttr{})};
 
     // Initialize any components that need initialization.
     mlir::Value box = builder.createBox(loc, fir::ExtendedValue{varOp});
@@ -1769,22 +1760,8 @@ private:
 
       if (attrs && bitEnumContainsAny(attrs.getFlags(),
                                       fir::FortranVariableFlagsEnum::pointer)) {
-        if (Fortran::semantics::IsProcedure(sym)) {
-          // Procedure pointer components.
-          if (Fortran::evaluate::UnwrapExpr<Fortran::evaluate::NullPointer>(
-                  expr)) {
-            auto boxTy{
-                Fortran::lower::getUntypedBoxProcType(builder.getContext())};
-            hlfir::Entity rhs(
-                fir::factory::createNullBoxProc(builder, loc, boxTy));
-            builder.createStoreWithConvert(loc, rhs, lhs);
-            continue;
-          }
-          hlfir::Entity rhs(getBase(Fortran::lower::convertExprToAddress(
-              loc, converter, expr, symMap, stmtCtx)));
-          builder.createStoreWithConvert(loc, rhs, lhs);
-          continue;
-        }
+        if (Fortran::semantics::IsProcedure(sym))
+          TODO(loc, "procedure pointer component in structure constructor");
         // Pointer component construction is just a copy of the box contents.
         fir::ExtendedValue lhsExv =
             hlfir::translateToExtendedValue(loc, builder, lhs);

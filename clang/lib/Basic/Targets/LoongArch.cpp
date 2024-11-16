@@ -285,8 +285,6 @@ bool LoongArchTargetInfo::handleTargetFeatures(
       HasFeatureLSX = true;
     else if (Feature == "+lasx")
       HasFeatureLASX = true;
-    else if (Feature == "-ual")
-      HasUnalignedAccess = false;
   }
   return true;
 }

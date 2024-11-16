@@ -28,7 +28,6 @@
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/OperationSupport.h"
@@ -120,7 +119,8 @@ static void fillStructuredOpRegion(OpBuilder &opBuilder, Region &region,
                                    TypeRange inputTypes, TypeRange outputTypes,
                                    ArrayRef<NamedAttribute> attrs,
                                    RegionBuilderFn regionBuilder) {
-  assert(llvm::all_of(outputTypes, llvm::IsaPred<ShapedType>));
+  assert(llvm::all_of(outputTypes,
+                      [](Type t) { return llvm::isa<ShapedType>(t); }));
 
   SmallVector<Type, 8> argTypes;
   SmallVector<Location, 8> argLocs;
@@ -162,7 +162,7 @@ static void buildStructuredOp(OpBuilder &b, OperationState &state,
       resultTensorTypes.value_or(TypeRange());
   if (!resultTensorTypes)
     copy_if(outputs.getTypes(), std::back_inserter(derivedResultTypes),
-            llvm::IsaPred<RankedTensorType>);
+            [](Type type) { return llvm::isa<RankedTensorType>(type); });
 
   state.addOperands(inputs);
   state.addOperands(outputs);
@@ -373,15 +373,14 @@ namespace {
 
 class RegionBuilderHelper {
 public:
-  RegionBuilderHelper(OpBuilder &builder, Block &block)
-      : builder(builder), block(block) {}
+  RegionBuilderHelper(MLIRContext *context, Block &block)
+      : context(context), block(block) {}
 
   // Build the unary functions defined by OpDSL.
   Value buildUnaryFn(UnaryFn unaryFn, Value arg) {
     if (!isFloatingPoint(arg))
       llvm_unreachable("unsupported non numeric type");
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     switch (unaryFn) {
     case UnaryFn::exp:
       return builder.create<math::ExpOp>(arg.getLoc(), arg);
@@ -395,24 +394,6 @@ public:
       return builder.create<math::FloorOp>(arg.getLoc(), arg);
     case UnaryFn::negf:
       return builder.create<arith::NegFOp>(arg.getLoc(), arg);
-    case UnaryFn::reciprocal: {
-      Attribute oneAttr = builder.getOneAttr(arg.getType());
-      auto one = builder.create<arith::ConstantOp>(arg.getLoc(),
-                                                   ::cast<TypedAttr>(oneAttr));
-      return builder.create<arith::DivFOp>(arg.getLoc(), one, arg);
-    }
-    case UnaryFn::round:
-      return builder.create<math::RoundOp>(arg.getLoc(), arg);
-    case UnaryFn::sqrt:
-      return builder.create<math::SqrtOp>(arg.getLoc(), arg);
-    case UnaryFn::rsqrt:
-      return builder.create<math::RsqrtOp>(arg.getLoc(), arg);
-    case UnaryFn::square:
-      return builder.create<arith::MulFOp>(arg.getLoc(), arg, arg);
-    case UnaryFn::tanh:
-      return builder.create<math::TanhOp>(arg.getLoc(), arg);
-    case UnaryFn::erf:
-      return builder.create<math::ErfOp>(arg.getLoc(), arg);
     }
     llvm_unreachable("unsupported unary function");
   }
@@ -426,8 +407,7 @@ public:
                    arg1.getType().getIntOrFloatBitWidth() == 1;
     if (!allComplex && !allFloatingPoint && !allInteger)
       llvm_unreachable("unsupported non numeric type");
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     switch (binaryFn) {
     case BinaryFn::add:
       if (allComplex)
@@ -485,9 +465,6 @@ public:
       if (allFloatingPoint)
         return builder.create<arith::MinimumFOp>(arg0.getLoc(), arg0, arg1);
       return builder.create<arith::MinUIOp>(arg0.getLoc(), arg0, arg1);
-    case BinaryFn::powf:
-      assert(allFloatingPoint);
-      return builder.create<math::PowFOp>(arg0.getLoc(), arg0, arg1);
     }
     llvm_unreachable("unsupported binary function");
   }
@@ -504,32 +481,29 @@ public:
   }
 
   void yieldOutputs(ValueRange values) {
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     Location loc = builder.getUnknownLoc();
     builder.create<YieldOp>(loc, values);
   }
 
   Value constant(const std::string &value) {
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     Location loc = builder.getUnknownLoc();
     Attribute valueAttr = parseAttribute(value, builder.getContext());
     return builder.create<arith::ConstantOp>(loc, ::cast<TypedAttr>(valueAttr));
   }
 
   Value index(int64_t dim) {
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     return builder.create<IndexOp>(builder.getUnknownLoc(), dim);
   }
 
   Type getIntegerType(unsigned width) {
-    return IntegerType::get(builder.getContext(), width);
+    return IntegerType::get(context, width);
   }
 
-  Type getFloat32Type() { return Float32Type::get(builder.getContext()); }
-  Type getFloat64Type() { return Float64Type::get(builder.getContext()); }
+  Type getFloat32Type() { return Float32Type::get(context); }
+  Type getFloat64Type() { return Float64Type::get(context); }
 
 private:
   // Generates operations to cast the given operand to a specified type.
@@ -537,8 +511,7 @@ private:
   // operand returned as-is (which will presumably yield a verification
   // issue downstream).
   Value cast(Type toType, Value operand, bool isUnsignedCast) {
-    OpBuilder::InsertionGuard g(builder);
-    builder.setInsertionPointToEnd(&block);
+    OpBuilder builder = getBuilder();
     auto loc = operand.getLoc();
     return convertScalarToDtype(builder, loc, operand, toType, isUnsignedCast);
   }
@@ -553,7 +526,13 @@ private:
     return llvm::isa<IntegerType>(value.getType());
   }
 
-  OpBuilder &builder;
+  OpBuilder getBuilder() {
+    OpBuilder builder(context);
+    builder.setInsertionPointToEnd(&block);
+    return builder;
+  }
+
+  MLIRContext *context;
   Block &block;
 };
 
@@ -607,20 +586,12 @@ struct FoldFillWithTensorReshape : OpRewritePattern<TensorReshapeOp> {
       return failure();
 
     Location loc = oldFill.getLoc();
-    TensorReshapeOp newInit;
-    if constexpr (std::is_same<TensorReshapeOp, tensor::ExpandShapeOp>::value) {
-
-      newInit = rewriter.create<TensorReshapeOp>(
-          loc, reshapeOp.getResultType(), oldFill.output(),
-          reshapeOp.getReassociation(), reshapeOp.getOutputShape(),
-          reshapeOp.getStaticOutputShape());
-    } else {
-      newInit = rewriter.create<TensorReshapeOp>(loc, reshapeOp.getResultType(),
-                                                 oldFill.output(),
-                                                 reshapeOp.getReassociation());
-    }
+    auto newInit = rewriter.create<TensorReshapeOp>(
+        loc, reshapeOp.getResultType(), oldFill.output(),
+        reshapeOp.getReassociation());
     rewriter.replaceOpWithNewOp<FillOp>(reshapeOp, ValueRange{oldFill.value()},
                                         ValueRange{newInit});
+
     return success();
   }
 };

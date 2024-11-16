@@ -4,7 +4,6 @@ add_mlir_library(MLIRSCFTestPasses
   TestLoopUnrolling.cpp
   TestSCFUtils.cpp
   TestSCFWrapInZeroTripCheck.cpp
-  TestUpliftWhileToFor.cpp
   TestWhileOpBuilder.cpp
 
   EXCLUDE_FROM_LIBMLIR

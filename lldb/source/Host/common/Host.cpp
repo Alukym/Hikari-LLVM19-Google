@@ -91,37 +91,15 @@ using namespace lldb_private;
 #if !defined(__APPLE__)
 #if !defined(_WIN32)
 #include <syslog.h>
-void Host::SystemLog(Severity severity, llvm::StringRef message) {
+void Host::SystemLog(llvm::StringRef message) {
   static llvm::once_flag g_openlog_once;
   llvm::call_once(g_openlog_once, [] {
     openlog("lldb", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_USER);
   });
-  int level = LOG_DEBUG;
-  switch (severity) {
-  case lldb::eSeverityInfo:
-    level = LOG_INFO;
-    break;
-  case lldb::eSeverityWarning:
-    level = LOG_WARNING;
-    break;
-  case lldb::eSeverityError:
-    level = LOG_ERR;
-    break;
-  }
-  syslog(level, "%s", message.data());
+  syslog(LOG_INFO, "%s", message.data());
 }
 #else
-void Host::SystemLog(Severity severity, llvm::StringRef message) {
-  switch (severity) {
-  case lldb::eSeverityInfo:
-  case lldb::eSeverityWarning:
-    llvm::outs() << message;
-    break;
-  case lldb::eSeverityError:
-    llvm::errs() << message;
-    break;
-  }
-}
+void Host::SystemLog(llvm::StringRef message) { llvm::errs() << message; }
 #endif
 #endif
 
@@ -651,5 +629,5 @@ char SystemLogHandler::ID;
 SystemLogHandler::SystemLogHandler() {}
 
 void SystemLogHandler::Emit(llvm::StringRef message) {
-  Host::SystemLog(lldb::eSeverityInfo, message);
+  Host::SystemLog(message);
 }

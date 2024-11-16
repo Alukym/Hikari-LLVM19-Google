@@ -197,13 +197,8 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::SDIVREM, MVT::i32, Custom);
   setOperationAction(ISD::UDIVREM, MVT::i32, Custom);
   setOperationAction(ISD::ATOMIC_FENCE,       MVT::Other, Custom);
-  if (Subtarget.hasMips32r6()) {
-    setOperationAction(ISD::LOAD,               MVT::i32, Legal);
-    setOperationAction(ISD::STORE,              MVT::i32, Legal);
-  } else {
-    setOperationAction(ISD::LOAD,               MVT::i32, Custom);
-    setOperationAction(ISD::STORE,              MVT::i32, Custom);
-  }
+  setOperationAction(ISD::LOAD,               MVT::i32, Custom);
+  setOperationAction(ISD::STORE,              MVT::i32, Custom);
 
   setTargetDAGCombine(ISD::MUL);
 
@@ -430,8 +425,6 @@ bool MipsSETargetLowering::allowsMisalignedMemoryAccesses(
     if (Fast)
       *Fast = 1;
     return true;
-  } else if (Subtarget.hasMips32r6()) {
-    return false;
   }
 
   switch (SVT) {

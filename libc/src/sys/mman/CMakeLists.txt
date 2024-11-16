@@ -85,17 +85,3 @@ add_entrypoint_object(
   DEPENDS
     .${LIBC_TARGET_OS}.msync
 )
-
-add_entrypoint_object(
-  shm_open
-  ALIAS
-  DEPENDS
-    .${LIBC_TARGET_OS}.shm_open
-)
-
-add_entrypoint_object(
-  shm_unlink
-  ALIAS
-  DEPENDS
-    .${LIBC_TARGET_OS}.shm_unlink
-)

@@ -135,7 +135,7 @@ void SPIRVDialect::initialize() {
 
   // Allow unknown operations because SPIR-V is extensible.
   allowUnknownOperations();
-  declarePromisedInterface<gpu::TargetAttrInterface, TargetEnvAttr>();
+  declarePromisedInterface<TargetEnvAttr, gpu::TargetAttrInterface>();
 }
 
 std::string SPIRVDialect::getAttributeName(Decoration decoration) {

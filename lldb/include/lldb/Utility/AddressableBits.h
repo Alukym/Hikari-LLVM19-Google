@@ -32,13 +32,11 @@ public:
 
   void SetLowmemAddressableBits(uint32_t lowmem_addressing_bits);
 
-  uint32_t GetLowmemAddressableBits() const;
-
   void SetHighmemAddressableBits(uint32_t highmem_addressing_bits);
 
-  uint32_t GetHighmemAddressableBits() const;
-
   static lldb::addr_t AddressableBitToMask(uint32_t addressable_bits);
+
+  void SetProcessMasks(lldb_private::Process &process);
 
 private:
   uint32_t m_low_memory_addr_bits;

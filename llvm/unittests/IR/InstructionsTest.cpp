@@ -25,14 +25,11 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm-c/Core.h"
 #include "gmock/gmock-matchers.h"
 #include "gtest/gtest.h"
 #include <memory>
-
-extern llvm::cl::opt<bool> UseNewDbgInfoFormat;
 
 namespace llvm {
 namespace {
@@ -1413,7 +1410,6 @@ TEST(InstructionsTest, GetSplat) {
   LLVMContext Ctx;
   Type *Int32Ty = Type::getInt32Ty(Ctx);
   Constant *CU = UndefValue::get(Int32Ty);
-  Constant *CP = PoisonValue::get(Int32Ty);
   Constant *C0 = ConstantInt::get(Int32Ty, 0);
   Constant *C1 = ConstantInt::get(Int32Ty, 1);
 
@@ -1423,48 +1419,34 @@ TEST(InstructionsTest, GetSplat) {
   Constant *Splat1Undef = ConstantVector::get({CU, CU, C1, CU});
   Constant *NotSplat = ConstantVector::get({C1, C1, C0, C1 ,C1});
   Constant *NotSplatUndef = ConstantVector::get({CU, C1, CU, CU ,C0});
-  Constant *Splat0Poison = ConstantVector::get({C0, CP, C0, CP});
-  Constant *Splat1Poison = ConstantVector::get({CP, CP, C1, CP});
-  Constant *NotSplatPoison = ConstantVector::get({CP, C1, CP, CP, C0});
 
-  // Default - undef/poison is not allowed.
+  // Default - undefs are not allowed.
   EXPECT_EQ(Splat0->getSplatValue(), C0);
   EXPECT_EQ(Splat1->getSplatValue(), C1);
   EXPECT_EQ(Splat0Undef->getSplatValue(), nullptr);
   EXPECT_EQ(Splat1Undef->getSplatValue(), nullptr);
-  EXPECT_EQ(Splat0Poison->getSplatValue(), nullptr);
-  EXPECT_EQ(Splat1Poison->getSplatValue(), nullptr);
   EXPECT_EQ(NotSplat->getSplatValue(), nullptr);
   EXPECT_EQ(NotSplatUndef->getSplatValue(), nullptr);
-  EXPECT_EQ(NotSplatPoison->getSplatValue(), nullptr);
 
-  // Disallow poison explicitly.
+  // Disallow undefs explicitly.
   EXPECT_EQ(Splat0->getSplatValue(false), C0);
   EXPECT_EQ(Splat1->getSplatValue(false), C1);
   EXPECT_EQ(Splat0Undef->getSplatValue(false), nullptr);
   EXPECT_EQ(Splat1Undef->getSplatValue(false), nullptr);
-  EXPECT_EQ(Splat0Poison->getSplatValue(false), nullptr);
-  EXPECT_EQ(Splat1Poison->getSplatValue(false), nullptr);
   EXPECT_EQ(NotSplat->getSplatValue(false), nullptr);
   EXPECT_EQ(NotSplatUndef->getSplatValue(false), nullptr);
-  EXPECT_EQ(NotSplatPoison->getSplatValue(false), nullptr);
 
-  // Allow poison but not undef.
+  // Allow undefs.
   EXPECT_EQ(Splat0->getSplatValue(true), C0);
   EXPECT_EQ(Splat1->getSplatValue(true), C1);
-  EXPECT_EQ(Splat0Undef->getSplatValue(true), nullptr);
-  EXPECT_EQ(Splat1Undef->getSplatValue(true), nullptr);
-  EXPECT_EQ(Splat0Poison->getSplatValue(true), C0);
-  EXPECT_EQ(Splat1Poison->getSplatValue(true), C1);
+  EXPECT_EQ(Splat0Undef->getSplatValue(true), C0);
+  EXPECT_EQ(Splat1Undef->getSplatValue(true), C1);
   EXPECT_EQ(NotSplat->getSplatValue(true), nullptr);
   EXPECT_EQ(NotSplatUndef->getSplatValue(true), nullptr);
-  EXPECT_EQ(NotSplatPoison->getSplatValue(true), nullptr);
 }
 
 TEST(InstructionsTest, SkipDebug) {
   LLVMContext C;
-  bool OldDbgValueMode = UseNewDbgInfoFormat;
-  UseNewDbgInfoFormat = false;
   std::unique_ptr<Module> M = parseIR(C,
                                       R"(
       declare void @llvm.dbg.value(metadata, metadata, metadata)
@@ -1500,7 +1482,6 @@ TEST(InstructionsTest, SkipDebug) {
 
   // After the terminator, there are no non-debug instructions.
   EXPECT_EQ(nullptr, Term->getNextNonDebugInstruction());
-  UseNewDbgInfoFormat = OldDbgValueMode;
 }
 
 TEST(InstructionsTest, PhiMightNotBeFPMathOperator) {

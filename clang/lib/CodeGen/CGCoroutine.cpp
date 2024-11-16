@@ -413,8 +413,10 @@ llvm::Function *
 CodeGenFunction::generateAwaitSuspendWrapper(Twine const &CoroName,
                                              Twine const &SuspendPointName,
                                              CoroutineSuspendExpr const &S) {
-  std::string FuncName =
-      (CoroName + ".__await_suspend_wrapper__" + SuspendPointName).str();
+  std::string FuncName = "__await_suspend_wrapper_";
+  FuncName += CoroName.str();
+  FuncName += '_';
+  FuncName += SuspendPointName.str();
 
   ASTContext &C = getContext();
 
@@ -865,8 +867,8 @@ void CodeGenFunction::EmitCoroutineBody(const CoroutineBodyStmt &S) {
     EmitStmt(S.getPromiseDeclStmt());
 
     Address PromiseAddr = GetAddrOfLocalVar(S.getPromiseDecl());
-    auto *PromiseAddrVoidPtr = new llvm::BitCastInst(
-        PromiseAddr.emitRawPointer(*this), VoidPtrTy, "", CoroId);
+    auto *PromiseAddrVoidPtr =
+        new llvm::BitCastInst(PromiseAddr.getPointer(), VoidPtrTy, "", CoroId);
     // Update CoroId to refer to the promise. We could not do it earlier because
     // promise local variable was not emitted yet.
     CoroId->setArgOperand(1, PromiseAddrVoidPtr);

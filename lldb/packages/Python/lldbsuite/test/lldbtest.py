@@ -751,8 +751,6 @@ class Base(unittest.TestCase):
             "settings set symbols.enable-external-lookup false",
             # Inherit the TCC permissions from the inferior's parent.
             "settings set target.inherit-tcc true",
-            # Based on https://discourse.llvm.org/t/running-lldb-in-a-container/76801/4
-            "settings set target.disable-aslr false",
             # Kill rather than detach from the inferior if something goes wrong.
             "settings set target.detach-on-error false",
             # Disable fix-its by default so that incorrect expressions in tests don't
@@ -1473,12 +1471,11 @@ class Base(unittest.TestCase):
             d = {
                 "CXX_SOURCES": sources,
                 "EXE": exe_name,
-                "CFLAGS_EXTRAS": "%s %s -I%s -I%s"
+                "CFLAGS_EXTRAS": "%s %s -I%s"
                 % (
                     stdflag,
                     stdlibflag,
                     os.path.join(os.environ["LLDB_SRC"], "include"),
-                    os.path.join(configuration.lldb_obj_root, "include"),
                 ),
                 "LD_EXTRAS": "-L%s -lliblldb" % lib_dir,
             }
@@ -1486,12 +1483,11 @@ class Base(unittest.TestCase):
             d = {
                 "CXX_SOURCES": sources,
                 "EXE": exe_name,
-                "CFLAGS_EXTRAS": "%s %s -I%s -I%s"
+                "CFLAGS_EXTRAS": "%s %s -I%s"
                 % (
                     stdflag,
                     stdlibflag,
                     os.path.join(os.environ["LLDB_SRC"], "include"),
-                    os.path.join(configuration.lldb_obj_root, "include"),
                 ),
                 "LD_EXTRAS": "-L%s -llldb -Wl,-rpath,%s" % (lib_dir, lib_dir),
             }
@@ -1510,8 +1506,7 @@ class Base(unittest.TestCase):
             d = {
                 "DYLIB_CXX_SOURCES": sources,
                 "DYLIB_NAME": lib_name,
-                "CFLAGS_EXTRAS": "%s -stdlib=libc++ -I%s"
-                % (stdflag, os.path.join(configuration.lldb_obj_root, "include")),
+                "CFLAGS_EXTRAS": "%s -stdlib=libc++" % stdflag,
                 "FRAMEWORK_INCLUDES": "-F%s" % self.framework_dir,
                 "LD_EXTRAS": "%s -Wl,-rpath,%s -dynamiclib"
                 % (self.lib_lldb, self.framework_dir),
@@ -1520,24 +1515,16 @@ class Base(unittest.TestCase):
             d = {
                 "DYLIB_CXX_SOURCES": sources,
                 "DYLIB_NAME": lib_name,
-                "CFLAGS_EXTRAS": "%s -I%s -I%s"
-                % (
-                    stdflag,
-                    os.path.join(os.environ["LLDB_SRC"], "include"),
-                    os.path.join(configuration.lldb_obj_root, "include"),
-                ),
-                "LD_EXTRAS": "-shared -l%s\\liblldb.lib" % lib_dir,
+                "CFLAGS_EXTRAS": "%s -I%s "
+                % (stdflag, os.path.join(os.environ["LLDB_SRC"], "include")),
+                "LD_EXTRAS": "-shared -l%s\liblldb.lib" % lib_dir,
             }
         else:
             d = {
                 "DYLIB_CXX_SOURCES": sources,
                 "DYLIB_NAME": lib_name,
-                "CFLAGS_EXTRAS": "%s -I%s -I%s -fPIC"
-                % (
-                    stdflag,
-                    os.path.join(os.environ["LLDB_SRC"], "include"),
-                    os.path.join(configuration.lldb_obj_root, "include"),
-                ),
+                "CFLAGS_EXTRAS": "%s -I%s -fPIC"
+                % (stdflag, os.path.join(os.environ["LLDB_SRC"], "include")),
                 "LD_EXTRAS": "-shared -L%s -llldb -Wl,-rpath,%s" % (lib_dir, lib_dir),
             }
         if self.TraceOn():

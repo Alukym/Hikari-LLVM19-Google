@@ -774,8 +774,7 @@ static AffineExpr simplifyMul(AffineExpr lhs, AffineExpr rhs) {
     return getAffineConstantExpr(lhsConst.getValue() * rhsConst.getValue(),
                                  lhs.getContext());
 
-  if (!lhs.isSymbolicOrConstant() && !rhs.isSymbolicOrConstant())
-    return nullptr;
+  assert(lhs.isSymbolicOrConstant() || rhs.isSymbolicOrConstant());
 
   // Canonicalize the mul expression so that the constant/symbolic term is the
   // RHS. If both the lhs and rhs are symbolic, swap them if the lhs is a

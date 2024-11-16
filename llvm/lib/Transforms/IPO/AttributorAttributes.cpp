@@ -2452,9 +2452,8 @@ bool AANonNull::isImpliedByIR(Attributor &A, const IRPosition &IRP,
   }
 
   if (llvm::any_of(Worklist, [&](AA::ValueAndContext VAC) {
-        return !isKnownNonZero(
-            VAC.getValue(),
-            SimplifyQuery(A.getDataLayout(), DT, AC, VAC.getCtxI()));
+        return !isKnownNonZero(VAC.getValue(), A.getDataLayout(), 0, AC,
+                               VAC.getCtxI(), DT);
       }))
     return false;
 
@@ -5191,12 +5190,6 @@ static unsigned getKnownAlignForUse(Attributor &A, AAAlign &QueryingAA,
   } else if (auto *LI = dyn_cast<LoadInst>(I)) {
     if (LI->getPointerOperand() == UseV)
       MA = LI->getAlign();
-  } else if (auto *AI = dyn_cast<AtomicRMWInst>(I)) {
-    if (AI->getPointerOperand() == UseV)
-      MA = AI->getAlign();
-  } else if (auto *AI = dyn_cast<AtomicCmpXchgInst>(I)) {
-    if (AI->getPointerOperand() == UseV)
-      MA = AI->getAlign();
   }
 
   if (!MA || *MA <= QueryingAA.getKnownAlign())

@@ -93,16 +93,9 @@ void mapSymbolAttributes(AbstractConverter &, const semantics::SymbolRef &,
 /// Instantiate the variables that appear in the specification expressions
 /// of the result of a function call. The instantiated variables are added
 /// to \p symMap.
-void mapCallInterfaceSymbolsForResult(
-    AbstractConverter &, const Fortran::lower::CallerInterface &caller,
-    SymMap &symMap);
-
-/// Instantiate the variables that appear in the specification expressions
-/// of a dummy argument of a procedure call. The instantiated variables are
-/// added to \p symMap.
-void mapCallInterfaceSymbolsForDummyArgument(
-    AbstractConverter &, const Fortran::lower::CallerInterface &caller,
-    SymMap &symMap, const Fortran::semantics::Symbol &dummySymbol);
+void mapCallInterfaceSymbols(AbstractConverter &,
+                             const Fortran::lower::CallerInterface &caller,
+                             SymMap &symMap);
 
 // TODO: consider saving the initial expression symbol dependence analysis in
 // in the PFT variable and dealing with the dependent symbols instantiation in
@@ -161,9 +154,9 @@ void genDeclareSymbol(Fortran::lower::AbstractConverter &converter,
                           fir::FortranVariableFlagsEnum::None,
                       bool force = false);
 
-/// Given the Fortran type of a Cray pointee, return the fir.box type used to
-/// track the cray pointee as Fortran pointer.
-mlir::Type getCrayPointeeBoxType(mlir::Type);
+/// For the given Cray pointee symbol return the corresponding
+/// Cray pointer symbol. Assert if the pointer symbol cannot be found.
+Fortran::semantics::SymbolRef getCrayPointer(Fortran::semantics::SymbolRef sym);
 
 } // namespace lower
 } // namespace Fortran

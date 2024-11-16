@@ -27,7 +27,8 @@ static bool isElementwiseMappableOpOnRankedTensors(Operation *op) {
 
   // TODO: The conversion pattern can be made to work for `any_of` here, but
   // it's more complex as it requires tracking which operands are scalars.
-  return llvm::all_of(op->getOperandTypes(), llvm::IsaPred<RankedTensorType>);
+  return llvm::all_of(op->getOperandTypes(),
+                      [](Type type) { return isa<RankedTensorType>(type); });
 }
 
 /// Given `op` assumed `isElementwiseMappableOpOnRankedTensors`, iterate over

@@ -71,11 +71,10 @@ public:
 
   T load(MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
          [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_load_n)
-    return __scoped_atomic_load_n(&val, int(mem_ord), (int)(mem_scope));
-#else
-    return __atomic_load_n(&val, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_load_n))
+      return __scoped_atomic_load_n(&val, int(mem_ord), (int)(mem_scope));
+    else
+      return __atomic_load_n(&val, int(mem_ord));
   }
 
   // Atomic store.
@@ -86,11 +85,10 @@ public:
 
   void store(T rhs, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
              [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_store_n)
-    __scoped_atomic_store_n(&val, rhs, int(mem_ord), (int)(mem_scope));
-#else
-    __atomic_store_n(&val, rhs, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_store_n))
+      __scoped_atomic_store_n(&val, rhs, int(mem_ord), (int)(mem_scope));
+    else
+      __atomic_store_n(&val, rhs, int(mem_ord));
   }
 
   // Atomic compare exchange
@@ -101,83 +99,49 @@ public:
                                        int(mem_ord), int(mem_ord));
   }
 
-  // Atomic compare exchange (separate success and failure memory orders)
-  bool compare_exchange_strong(
-      T &expected, T desired, MemoryOrder success_order,
-      MemoryOrder failure_order,
-      [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-    return __atomic_compare_exchange_n(&val, &expected, desired, false,
-                                       static_cast<int>(success_order),
-                                       static_cast<int>(failure_order));
-  }
-
-  // Atomic compare exchange (weak version)
-  bool compare_exchange_weak(
-      T &expected, T desired, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
-      [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-    return __atomic_compare_exchange_n(&val, &expected, desired, true,
-                                       static_cast<int>(mem_ord),
-                                       static_cast<int>(mem_ord));
-  }
-
-  // Atomic compare exchange (weak version with separate success and failure
-  // memory orders)
-  bool compare_exchange_weak(
-      T &expected, T desired, MemoryOrder success_order,
-      MemoryOrder failure_order,
-      [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-    return __atomic_compare_exchange_n(&val, &expected, desired, true,
-                                       static_cast<int>(success_order),
-                                       static_cast<int>(failure_order));
-  }
-
   T exchange(T desired, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
              [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_exchange_n)
-    return __scoped_atomic_exchange_n(&val, desired, int(mem_ord),
-                                      (int)(mem_scope));
-#else
-    return __atomic_exchange_n(&val, desired, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_exchange_n))
+      return __scoped_atomic_exchange_n(&val, desired, int(mem_ord),
+                                        (int)(mem_scope));
+    else
+      return __atomic_exchange_n(&val, desired, int(mem_ord));
   }
 
   T fetch_add(T increment, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
               [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_fetch_add)
-    return __scoped_atomic_fetch_add(&val, increment, int(mem_ord),
-                                     (int)(mem_scope));
-#else
-    return __atomic_fetch_add(&val, increment, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_fetch_add))
+      return __scoped_atomic_fetch_add(&val, increment, int(mem_ord),
+                                       (int)(mem_scope));
+    else
+      return __atomic_fetch_add(&val, increment, int(mem_ord));
   }
 
   T fetch_or(T mask, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
              [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_fetch_or)
-    return __scoped_atomic_fetch_or(&val, mask, int(mem_ord), (int)(mem_scope));
-#else
-    return __atomic_fetch_or(&val, mask, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_fetch_or))
+      return __scoped_atomic_fetch_or(&val, mask, int(mem_ord),
+                                      (int)(mem_scope));
+    else
+      return __atomic_fetch_or(&val, mask, int(mem_ord));
   }
 
   T fetch_and(T mask, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
               [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_fetch_and)
-    return __scoped_atomic_fetch_and(&val, mask, int(mem_ord),
-                                     (int)(mem_scope));
-#else
-    return __atomic_fetch_and(&val, mask, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_fetch_and))
+      return __scoped_atomic_fetch_and(&val, mask, int(mem_ord),
+                                       (int)(mem_scope));
+    else
+      return __atomic_fetch_and(&val, mask, int(mem_ord));
   }
 
   T fetch_sub(T decrement, MemoryOrder mem_ord = MemoryOrder::SEQ_CST,
               [[maybe_unused]] MemoryScope mem_scope = MemoryScope::DEVICE) {
-#if __has_builtin(__scoped_atomic_fetch_sub)
-    return __scoped_atomic_fetch_sub(&val, decrement, int(mem_ord),
-                                     (int)(mem_scope));
-#else
-    return __atomic_fetch_sub(&val, decrement, int(mem_ord));
-#endif
+    if constexpr (LIBC_HAS_BUILTIN(__scoped_atomic_fetch_sub))
+      return __scoped_atomic_fetch_sub(&val, decrement, int(mem_ord),
+                                       (int)(mem_scope));
+    else
+      return __atomic_fetch_sub(&val, decrement, int(mem_ord));
   }
 
   // Set the value without using an atomic operation. This is useful
@@ -202,7 +166,7 @@ LIBC_INLINE void atomic_thread_fence([[maybe_unused]] MemoryOrder mem_ord) {
 // except no instructions for memory ordering are issued. Only reordering of
 // the instructions by the compiler is suppressed as order instructs.
 LIBC_INLINE void atomic_signal_fence([[maybe_unused]] MemoryOrder mem_ord) {
-#if __has_builtin(__atomic_signal_fence)
+#if LIBC_HAS_BUILTIN(__atomic_signal_fence)
   __atomic_signal_fence(static_cast<int>(mem_ord));
 #else
   // if the builtin is not ready, use asm as a full compiler barrier.

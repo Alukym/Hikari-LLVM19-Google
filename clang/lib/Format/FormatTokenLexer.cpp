@@ -404,7 +404,7 @@ bool FormatTokenLexer::tryMergeNullishCoalescingEqual() {
     return false;
   auto &NullishCoalescing = *(Tokens.end() - 2);
   auto &Equal = *(Tokens.end() - 1);
-  if (NullishCoalescing->isNot(TT_NullCoalescingOperator) ||
+  if (NullishCoalescing->getType() != TT_NullCoalescingOperator ||
       Equal->isNot(tok::equal)) {
     return false;
   }

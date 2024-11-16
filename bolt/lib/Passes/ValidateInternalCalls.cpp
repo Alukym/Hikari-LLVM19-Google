@@ -14,6 +14,7 @@
 #include "bolt/Core/BinaryBasicBlock.h"
 #include "bolt/Passes/DataflowInfoManager.h"
 #include "bolt/Passes/FrameAnalysis.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include <optional>
 #include <queue>

@@ -2133,8 +2133,7 @@ bool X86FastISel::X86FastEmitCMoveSelect(MVT RetVT, const Instruction *I) {
     return false;
 
   const TargetRegisterInfo &TRI = *Subtarget->getRegisterInfo();
-  unsigned Opc = X86::getCMovOpcode(TRI.getRegSizeInBits(*RC) / 8, false,
-                                    Subtarget->hasNDD());
+  unsigned Opc = X86::getCMovOpcode(TRI.getRegSizeInBits(*RC)/8);
   Register ResultReg = fastEmitInst_rri(Opc, RC, RHSReg, LHSReg, CC);
   updateValueMap(I, ResultReg);
   return true;

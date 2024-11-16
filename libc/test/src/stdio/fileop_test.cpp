@@ -11,7 +11,6 @@
 #include "src/stdio/feof.h"
 #include "src/stdio/ferror.h"
 #include "src/stdio/fflush.h"
-#include "src/stdio/fileno.h"
 #include "src/stdio/fopen.h"
 #include "src/stdio/fputs.h"
 #include "src/stdio/fread.h"
@@ -31,7 +30,6 @@ TEST(LlvmLibcFILETest, SimpleFileOperations) {
   constexpr char FILENAME[] = "testdata/simple_operations.test";
   ::FILE *file = LIBC_NAMESPACE::fopen(FILENAME, "w");
   ASSERT_FALSE(file == nullptr);
-  ASSERT_EQ(LIBC_NAMESPACE::fileno(file), 3);
   constexpr char CONTENT[] = "1234567890987654321";
   ASSERT_EQ(sizeof(CONTENT) - 1,
             LIBC_NAMESPACE::fwrite(CONTENT, 1, sizeof(CONTENT) - 1, file));

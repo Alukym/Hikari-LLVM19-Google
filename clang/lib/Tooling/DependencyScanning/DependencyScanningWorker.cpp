@@ -364,16 +364,18 @@ public:
         return false;
 
     // Use the dependency scanning optimized file system if requested to do so.
-    if (DepFS)
+    if (DepFS) {
+      llvm::IntrusiveRefCntPtr<DependencyScanningWorkerFilesystem> LocalDepFS =
+          DepFS;
       ScanInstance.getPreprocessorOpts().DependencyDirectivesForFile =
-          [LocalDepFS = DepFS](FileEntryRef File)
+          [LocalDepFS = std::move(LocalDepFS)](FileEntryRef File)
           -> std::optional<ArrayRef<dependency_directives_scan::Directive>> {
         if (llvm::ErrorOr<EntryRef> Entry =
                 LocalDepFS->getOrCreateFileSystemEntry(File.getName()))
-          if (LocalDepFS->ensureDirectiveTokensArePopulated(*Entry))
-            return Entry->getDirectiveTokens();
+          return Entry->getDirectiveTokens();
         return std::nullopt;
       };
+    }
 
     // Create the dependency collector that will collect the produced
     // dependencies.
@@ -438,9 +440,6 @@ public:
 
     if (Result)
       setLastCC1Arguments(std::move(OriginalInvocation));
-
-    // Propagate the statistics to the parent FileManager.
-    DriverFileMgr->AddStats(ScanInstance.getFileManager());
 
     return Result;
   }

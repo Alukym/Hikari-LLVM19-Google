@@ -140,7 +140,6 @@ compileFIR(const mlir::PassPipelineCLParser &passPipeline) {
       fir::createDefaultFIRCodeGenPassPipeline(pm, config);
     } else {
       // Run tco with O2 by default.
-      fir::registerDefaultInlinerPass(config);
       fir::createMLIRToLLVMPassPipeline(pm, config);
     }
     fir::addLLVMDialectToLLVMPass(pm, out.os());

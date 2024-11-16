@@ -208,7 +208,7 @@ private:
   llvm::DenseMap<const RecordDecl *, Record *> Records;
 
   /// Dummy parameter to generate pointers from.
-  llvm::DenseMap<const ValueDecl *, unsigned> DummyVariables;
+  llvm::DenseMap<const ValueDecl *, unsigned> DummyParams;
 
   /// Creates a new descriptor.
   template <typename... Ts>

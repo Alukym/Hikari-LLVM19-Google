@@ -272,17 +272,14 @@ bool GenerateModuleInterfaceAction::BeginSourceFileAction(
 std::unique_ptr<ASTConsumer>
 GenerateModuleInterfaceAction::CreateASTConsumer(CompilerInstance &CI,
                                                  StringRef InFile) {
-  std::vector<std::unique_ptr<ASTConsumer>> Consumers;
-  Consumers.push_back(std::make_unique<CXX20ModulesGenerator>(
-      CI.getPreprocessor(), CI.getModuleCache(),
-      CI.getFrontendOpts().OutputFile));
+  CI.getHeaderSearchOpts().ModulesSkipDiagnosticOptions = true;
+  CI.getHeaderSearchOpts().ModulesSkipHeaderSearchPaths = true;
+  CI.getHeaderSearchOpts().ModulesSkipPragmaDiagnosticMappings = true;
 
-  if (CI.getFrontendOpts().GenReducedBMI &&
-      !CI.getFrontendOpts().ModuleOutputPath.empty()) {
-    Consumers.push_back(std::make_unique<ReducedBMIGenerator>(
-        CI.getPreprocessor(), CI.getModuleCache(),
-        CI.getFrontendOpts().ModuleOutputPath));
-  }
+  std::vector<std::unique_ptr<ASTConsumer>> Consumers =
+      CreateMultiplexConsumer(CI, InFile);
+  if (Consumers.empty())
+    return nullptr;
 
   return std::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
@@ -453,8 +450,6 @@ private:
       return "BuildingBuiltinDumpStructCall";
     case CodeSynthesisContext::BuildingDeductionGuides:
       return "BuildingDeductionGuides";
-    case CodeSynthesisContext::TypeAliasTemplateInstantiation:
-      return "TypeAliasTemplateInstantiation";
     }
     return "";
   }
@@ -1088,7 +1083,6 @@ void PrintPreambleAction::ExecuteAction() {
   case Language::CUDA:
   case Language::HIP:
   case Language::HLSL:
-  case Language::CIR:
     break;
 
   case Language::Unknown:

@@ -39,6 +39,7 @@ define void @calls_declared_non_convergent() convergent {
 }
 
 ; CHECK: Function Attrs: convergent
+; CHECK-NEXT: declare i32 @declared_convergent()
 declare i32 @declared_convergent() convergent
 
 define i32 @calls_declared_convergent() convergent {

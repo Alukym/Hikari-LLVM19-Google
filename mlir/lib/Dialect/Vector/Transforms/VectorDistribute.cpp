@@ -598,8 +598,9 @@ struct WarpOpTransferWrite : public OpRewritePattern<WarpExecuteOnLane0Op> {
     }
 
     // Do not process warp ops that contain only TransferWriteOps.
-    if (llvm::all_of(warpOp.getOps(),
-                     llvm::IsaPred<vector::TransferWriteOp, vector::YieldOp>))
+    if (llvm::all_of(warpOp.getOps(), [](Operation &op) {
+          return isa<vector::TransferWriteOp, vector::YieldOp>(&op);
+        }))
       return failure();
 
     SmallVector<Value> yieldValues = {writeOp.getVector()};
@@ -745,8 +746,8 @@ struct WarpOpConstant : public OpRewritePattern<WarpExecuteOnLane0Op> {
   using OpRewritePattern<WarpExecuteOnLane0Op>::OpRewritePattern;
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *yieldOperand =
-        getWarpResult(warpOp, llvm::IsaPred<arith::ConstantOp>);
+    OpOperand *yieldOperand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<arith::ConstantOp>(op); });
     if (!yieldOperand)
       return failure();
     auto constantOp = yieldOperand->get().getDefiningOp<arith::ConstantOp>();
@@ -1059,8 +1060,8 @@ struct WarpOpBroadcast : public OpRewritePattern<WarpExecuteOnLane0Op> {
   using OpRewritePattern<WarpExecuteOnLane0Op>::OpRewritePattern;
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::BroadcastOp>);
+    OpOperand *operand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::BroadcastOp>(op); });
     if (!operand)
       return failure();
     unsigned int operandNumber = operand->getOperandNumber();
@@ -1096,8 +1097,8 @@ struct WarpOpShapeCast : public OpRewritePattern<WarpExecuteOnLane0Op> {
   using OpRewritePattern<WarpExecuteOnLane0Op>::OpRewritePattern;
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::ShapeCastOp>);
+    OpOperand *operand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::ShapeCastOp>(op); });
     if (!operand)
       return failure();
 
@@ -1155,8 +1156,8 @@ struct WarpOpCreateMask : public OpRewritePattern<WarpExecuteOnLane0Op> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *yieldOperand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::CreateMaskOp>);
+    OpOperand *yieldOperand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::CreateMaskOp>(op); });
     if (!yieldOperand)
       return failure();
 
@@ -1221,8 +1222,8 @@ struct WarpOpExtract : public OpRewritePattern<WarpExecuteOnLane0Op> {
   using OpRewritePattern<WarpExecuteOnLane0Op>::OpRewritePattern;
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::ExtractOp>);
+    OpOperand *operand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::ExtractOp>(op); });
     if (!operand)
       return failure();
     unsigned int operandNumber = operand->getOperandNumber();
@@ -1324,8 +1325,9 @@ struct WarpOpExtractElement : public OpRewritePattern<WarpExecuteOnLane0Op> {
         warpShuffleFromIdxFn(std::move(fn)) {}
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::ExtractElementOp>);
+    OpOperand *operand = getWarpResult(warpOp, [](Operation *op) {
+      return isa<vector::ExtractElementOp>(op);
+    });
     if (!operand)
       return failure();
     unsigned int operandNumber = operand->getOperandNumber();
@@ -1420,8 +1422,8 @@ struct WarpOpInsertElement : public OpRewritePattern<WarpExecuteOnLane0Op> {
 
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::InsertElementOp>);
+    OpOperand *operand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::InsertElementOp>(op); });
     if (!operand)
       return failure();
     unsigned int operandNumber = operand->getOperandNumber();
@@ -1501,7 +1503,8 @@ struct WarpOpInsert : public OpRewritePattern<WarpExecuteOnLane0Op> {
 
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *operand = getWarpResult(warpOp, llvm::IsaPred<vector::InsertOp>);
+    OpOperand *operand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::InsertOp>(op); });
     if (!operand)
       return failure();
     unsigned int operandNumber = operand->getOperandNumber();
@@ -1805,8 +1808,8 @@ struct WarpOpReduction : public OpRewritePattern<WarpExecuteOnLane0Op> {
 
   LogicalResult matchAndRewrite(WarpExecuteOnLane0Op warpOp,
                                 PatternRewriter &rewriter) const override {
-    OpOperand *yieldOperand =
-        getWarpResult(warpOp, llvm::IsaPred<vector::ReductionOp>);
+    OpOperand *yieldOperand = getWarpResult(
+        warpOp, [](Operation *op) { return isa<vector::ReductionOp>(op); });
     if (!yieldOperand)
       return failure();
 

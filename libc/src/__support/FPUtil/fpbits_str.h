@@ -35,6 +35,7 @@ using ZeroPaddedHexFmt = IntegerToString<
 //    floating encoding.
 template <typename T> LIBC_INLINE cpp::string str(fputil::FPBits<T> x) {
   using StorageType = typename fputil::FPBits<T>::StorageType;
+  using Sign = fputil::Sign;
 
   if (x.is_nan())
     return "(NaN)";

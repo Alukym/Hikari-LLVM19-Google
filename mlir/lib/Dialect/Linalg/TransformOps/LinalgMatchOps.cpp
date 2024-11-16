@@ -12,8 +12,7 @@
 #include "mlir/Dialect/Linalg/IR/LinalgInterfaces.h"
 #include "mlir/Dialect/Linalg/TransformOps/Syntax.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
-#include "mlir/Dialect/Transform/IR/TransformTypes.h"
-#include "mlir/Dialect/Transform/Interfaces/MatchInterfaces.h"
+#include "mlir/Dialect/Transform/IR/MatchInterfaces.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "llvm/Support/Debug.h"
@@ -202,9 +201,9 @@ DiagnosedSilenceableFailure transform::MatchStructuredBodyOp::matchOperation(
         body,
         [&](Operation *elem, Operation *red) {
           return elem->getName().getStringRef() ==
-                     cast<StringAttr>((*contractionOps)[0]).getValue() &&
+                     (*contractionOps)[0].cast<StringAttr>().getValue() &&
                  red->getName().getStringRef() ==
-                     cast<StringAttr>((*contractionOps)[1]).getValue();
+                     (*contractionOps)[1].cast<StringAttr>().getValue();
         },
         os);
     if (result)
@@ -259,11 +258,11 @@ transform::MatchStructuredClassifyContractionDimsOp::matchOperation(
           return builder.getI64IntegerAttr(value);
         }));
   };
-  results.setParams(cast<OpResult>(getBatch()),
+  results.setParams(getBatch().cast<OpResult>(),
                     makeI64Attrs(contractionDims->batch));
-  results.setParams(cast<OpResult>(getM()), makeI64Attrs(contractionDims->m));
-  results.setParams(cast<OpResult>(getN()), makeI64Attrs(contractionDims->n));
-  results.setParams(cast<OpResult>(getK()), makeI64Attrs(contractionDims->k));
+  results.setParams(getM().cast<OpResult>(), makeI64Attrs(contractionDims->m));
+  results.setParams(getN().cast<OpResult>(), makeI64Attrs(contractionDims->n));
+  results.setParams(getK().cast<OpResult>(), makeI64Attrs(contractionDims->k));
   return DiagnosedSilenceableFailure::success();
 }
 
@@ -288,17 +287,17 @@ transform::MatchStructuredClassifyConvolutionDimsOp::matchOperation(
           return builder.getI64IntegerAttr(value);
         }));
   };
-  results.setParams(cast<OpResult>(getBatch()),
+  results.setParams(getBatch().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->batch));
-  results.setParams(cast<OpResult>(getOutputImage()),
+  results.setParams(getOutputImage().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->outputImage));
-  results.setParams(cast<OpResult>(getOutputChannel()),
+  results.setParams(getOutputChannel().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->outputChannel));
-  results.setParams(cast<OpResult>(getFilterLoop()),
+  results.setParams(getFilterLoop().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->filterLoop));
-  results.setParams(cast<OpResult>(getInputChannel()),
+  results.setParams(getInputChannel().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->inputChannel));
-  results.setParams(cast<OpResult>(getDepth()),
+  results.setParams(getDepth().cast<OpResult>(),
                     makeI64Attrs(convolutionDims->depth));
 
   auto makeI64AttrsFromI64 = [&](ArrayRef<int64_t> values) {
@@ -307,9 +306,9 @@ transform::MatchStructuredClassifyConvolutionDimsOp::matchOperation(
           return builder.getI64IntegerAttr(value);
         }));
   };
-  results.setParams(cast<OpResult>(getStrides()),
+  results.setParams(getStrides().cast<OpResult>(),
                     makeI64AttrsFromI64(convolutionDims->strides));
-  results.setParams(cast<OpResult>(getDilations()),
+  results.setParams(getDilations().cast<OpResult>(),
                     makeI64AttrsFromI64(convolutionDims->dilations));
   return DiagnosedSilenceableFailure::success();
 }

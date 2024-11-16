@@ -23,7 +23,6 @@ add_llvm_target(LoongArchCodeGen
   LoongArchISelDAGToDAG.cpp
   LoongArchISelLowering.cpp
   LoongArchMCInstLower.cpp
-  LoongArchOptWInstrs.cpp
   LoongArchRegisterInfo.cpp
   LoongArchSubtarget.cpp
   LoongArchTargetMachine.cpp

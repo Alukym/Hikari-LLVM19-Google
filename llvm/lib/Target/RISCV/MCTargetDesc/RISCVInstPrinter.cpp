@@ -292,24 +292,24 @@ void RISCVInstPrinter::printRegReg(const MCInst *MI, unsigned OpNo,
   O << ")";
 }
 
-void RISCVInstPrinter::printStackAdj(const MCInst *MI, unsigned OpNo,
-                                     const MCSubtargetInfo &STI, raw_ostream &O,
-                                     bool Negate) {
+void RISCVInstPrinter::printSpimm(const MCInst *MI, unsigned OpNo,
+                                  const MCSubtargetInfo &STI, raw_ostream &O) {
   int64_t Imm = MI->getOperand(OpNo).getImm();
+  unsigned Opcode = MI->getOpcode();
   bool IsRV64 = STI.hasFeature(RISCV::Feature64Bit);
-  int64_t StackAdj = 0;
+  bool IsEABI = STI.hasFeature(RISCV::FeatureRVE);
+  int64_t Spimm = 0;
   auto RlistVal = MI->getOperand(0).getImm();
   assert(RlistVal != 16 && "Incorrect rlist.");
-  auto Base = RISCVZC::getStackAdjBase(RlistVal, IsRV64);
-  StackAdj = Imm + Base;
-  assert((StackAdj >= Base && StackAdj <= Base + 48) &&
-         "Incorrect stack adjust");
-  if (Negate)
-    StackAdj = -StackAdj;
+  auto Base = RISCVZC::getStackAdjBase(RlistVal, IsRV64, IsEABI);
+  Spimm = Imm + Base;
+  assert((Spimm >= Base && Spimm <= Base + 48) && "Incorrect spimm");
+  if (Opcode == RISCV::CM_PUSH)
+    Spimm = -Spimm;
 
   // RAII guard for ANSI color escape sequences
   WithMarkup ScopedMarkup = markup(O, Markup::Immediate);
-  O << StackAdj;
+  RISCVZC::printSpimm(Spimm, O);
 }
 
 void RISCVInstPrinter::printVMaskReg(const MCInst *MI, unsigned OpNo,

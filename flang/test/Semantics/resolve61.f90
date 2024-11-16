@@ -126,12 +126,3 @@ subroutine p13
     pointer(ip, x) ! ok, local declaration
   end
 end
-
-subroutine p14
-  real :: r
-  block
-    asynchronous :: r
-    !ERROR: PARAMETER attribute not allowed on 'r'
-    parameter (r = 1.0)
-  end block
-end

@@ -119,7 +119,3 @@ This document describes the available MLIR passes and their contracts.
 ## TOSA Dialect Passes
 
 [include "TosaPasses.md"]
-
-## XeGPU Dialect Passes
-
-[include "XeGPUPasses.md"]

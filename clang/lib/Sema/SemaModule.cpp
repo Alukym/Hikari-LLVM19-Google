@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTConsumer.h"
-#include "clang/AST/ASTMutationListener.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/SemaInternal.h"
@@ -475,9 +474,6 @@ Sema::ActOnModuleDecl(SourceLocation StartLoc, SourceLocation ModuleLoc,
   ImportState = ModuleImportState::ImportAllowed;
 
   getASTContext().setCurrentNamedModule(Mod);
-
-  if (auto *Listener = getASTMutationListener())
-    Listener->EnteringModulePurview();
 
   // We already potentially made an implicit import (in the case of a module
   // implementation unit importing its interface).  Make this module visible
@@ -1002,10 +998,6 @@ Decl *Sema::ActOnFinishExportDecl(Scope *S, Decl *D, SourceLocation RBraceLoc) {
       }
     }
   }
-
-  // Anything exported from a module should never be considered unused.
-  for (auto *Exported : ED->decls())
-    Exported->markUsed(getASTContext());
 
   return D;
 }

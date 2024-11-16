@@ -1,7 +1,6 @@
 // RUN: %clang_analyze_cc1 -analyzer-checker=webkit.NoUncountedMemberChecker -verify %s
 
 #include "mock-types.h"
-#include "mock-system-header.h"
 
 namespace members {
   struct Foo {
@@ -51,12 +50,3 @@ namespace ignore_unions {
 
   void forceTmplToInstantiate(RefPtr<RefCountable>) {}
 }
-
-namespace ignore_system_header {
-
-void foo(RefCountable* t) {
-  MemberVariable<RefCountable> var { t };
-  var.obj->method();
-}
-
-} // ignore_system_header

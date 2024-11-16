@@ -769,9 +769,11 @@ private:
 
   ArrayRef<unsigned> getUnavailableRegisters() const override {
     if (DisableUpperSSERegisters)
-      return ArrayRef(kUnavailableRegistersSSE);
+      return ArrayRef(kUnavailableRegistersSSE,
+                      sizeof(kUnavailableRegistersSSE) /
+                          sizeof(kUnavailableRegistersSSE[0]));
 
-    return ArrayRef(kUnavailableRegisters);
+    return ArrayRef(kUnavailableRegisters, std::size(kUnavailableRegisters));
   }
 
   bool allowAsBackToBack(const Instruction &Instr) const override {

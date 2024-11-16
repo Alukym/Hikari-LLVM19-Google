@@ -494,10 +494,6 @@ void Sema::ActOnStartOfObjCMethodDef(Scope *FnBodyScope, Decl *D) {
       }
     }
   }
-
-  // Some function attributes (like OptimizeNoneAttr) need actions before
-  // parsing body started.
-  applyFunctionAttributesBeforeParsingBody(D);
 }
 
 namespace {
@@ -1822,9 +1818,9 @@ Sema::ActOnForwardProtocolDeclaration(SourceLocation AtProtocolLoc,
 }
 
 ObjCCategoryDecl *Sema::ActOnStartCategoryInterface(
-    SourceLocation AtInterfaceLoc, const IdentifierInfo *ClassName,
+    SourceLocation AtInterfaceLoc, IdentifierInfo *ClassName,
     SourceLocation ClassLoc, ObjCTypeParamList *typeParamList,
-    const IdentifierInfo *CategoryName, SourceLocation CategoryLoc,
+    IdentifierInfo *CategoryName, SourceLocation CategoryLoc,
     Decl *const *ProtoRefs, unsigned NumProtoRefs,
     const SourceLocation *ProtoLocs, SourceLocation EndProtoLoc,
     const ParsedAttributesView &AttrList) {
@@ -1920,9 +1916,9 @@ ObjCCategoryDecl *Sema::ActOnStartCategoryInterface(
 /// category implementation declaration and build an ObjCCategoryImplDecl
 /// object.
 ObjCCategoryImplDecl *Sema::ActOnStartCategoryImplementation(
-    SourceLocation AtCatImplLoc, const IdentifierInfo *ClassName,
-    SourceLocation ClassLoc, const IdentifierInfo *CatName,
-    SourceLocation CatLoc, const ParsedAttributesView &Attrs) {
+    SourceLocation AtCatImplLoc, IdentifierInfo *ClassName,
+    SourceLocation ClassLoc, IdentifierInfo *CatName, SourceLocation CatLoc,
+    const ParsedAttributesView &Attrs) {
   ObjCInterfaceDecl *IDecl = getObjCInterfaceDecl(ClassName, ClassLoc, true);
   ObjCCategoryDecl *CatIDecl = nullptr;
   if (IDecl && IDecl->hasDefinition()) {
@@ -1986,8 +1982,8 @@ ObjCCategoryImplDecl *Sema::ActOnStartCategoryImplementation(
 }
 
 ObjCImplementationDecl *Sema::ActOnStartClassImplementation(
-    SourceLocation AtClassImplLoc, const IdentifierInfo *ClassName,
-    SourceLocation ClassLoc, const IdentifierInfo *SuperClassname,
+    SourceLocation AtClassImplLoc, IdentifierInfo *ClassName,
+    SourceLocation ClassLoc, IdentifierInfo *SuperClassname,
     SourceLocation SuperClassLoc, const ParsedAttributesView &Attrs) {
   ObjCInterfaceDecl *IDecl = nullptr;
   // Check for another declaration kind with the same name.
@@ -2755,7 +2751,7 @@ static void CheckProtocolMethodDefs(
     // implemented in the class, we should not issue "Method definition not
     // found" warnings.
     // FIXME: Use a general GetUnarySelector method for this.
-    const IdentifierInfo *II = &S.Context.Idents.get("forwardInvocation");
+    IdentifierInfo* II = &S.Context.Idents.get("forwardInvocation");
     Selector fISelector = S.Context.Selectors.getSelector(1, &II);
     if (InsMap.count(fISelector))
       // Is IDecl derived from 'NSProxy'? If so, no instance methods
@@ -5109,8 +5105,8 @@ bool Sema::CheckObjCDeclScope(Decl *D) {
 /// Called whenever \@defs(ClassName) is encountered in the source.  Inserts the
 /// instance variables of ClassName into Decls.
 void Sema::ActOnDefs(Scope *S, Decl *TagD, SourceLocation DeclStart,
-                     const IdentifierInfo *ClassName,
-                     SmallVectorImpl<Decl *> &Decls) {
+                     IdentifierInfo *ClassName,
+                     SmallVectorImpl<Decl*> &Decls) {
   // Check that ClassName is a valid class
   ObjCInterfaceDecl *Class = getObjCInterfaceDecl(ClassName, DeclStart);
   if (!Class) {
@@ -5152,7 +5148,8 @@ void Sema::ActOnDefs(Scope *S, Decl *TagD, SourceLocation DeclStart,
 VarDecl *Sema::BuildObjCExceptionDecl(TypeSourceInfo *TInfo, QualType T,
                                       SourceLocation StartLoc,
                                       SourceLocation IdLoc,
-                                      const IdentifierInfo *Id, bool Invalid) {
+                                      IdentifierInfo *Id,
+                                      bool Invalid) {
   // ISO/IEC TR 18037 S6.7.3: "The type of an object with automatic storage
   // duration shall not be qualified by an address-space qualifier."
   // Since all parameters have automatic store duration, they can not have

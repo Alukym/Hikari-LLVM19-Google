@@ -60,9 +60,9 @@ public:
         Verbose(C.getArgs().hasArg(options::OPT_v)) {
     populateSymbols();
     if (Verbose) {
-      for (const auto &Name : FatBinSymbols)
+      for (auto Name : FatBinSymbols)
         llvm::errs() << "Found undefined HIP fatbin symbol: " << Name << "\n";
-      for (const auto &Name : GPUBinHandleSymbols)
+      for (auto Name : GPUBinHandleSymbols)
         llvm::errs() << "Found undefined HIP gpubin handle symbol: " << Name
                      << "\n";
     }

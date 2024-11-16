@@ -111,8 +111,7 @@ Value *DwarfEHPrepare::GetExceptionObject(ResumeInst *RI) {
   }
 
   if (!ExnObj)
-    ExnObj = ExtractValueInst::Create(RI->getOperand(0), 0, "exn.obj",
-                                      RI->getIterator());
+    ExnObj = ExtractValueInst::Create(RI->getOperand(0), 0, "exn.obj", RI);
 
   RI->eraseFromParent();
 
@@ -159,7 +158,7 @@ size_t DwarfEHPrepare::pruneUnreachableResumes(
       Resumes[ResumesLeft++] = RI;
     } else {
       BasicBlock *BB = RI->getParent();
-      new UnreachableInst(Ctx, RI->getIterator());
+      new UnreachableInst(Ctx, RI);
       RI->eraseFromParent();
       simplifyCFG(BB, *TTI, DTU);
     }

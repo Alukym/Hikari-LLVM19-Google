@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Common/CodeGenTarget.h"
+#include "CodeGenTarget.h"
 #include "TableGenBackends.h"
 #include "WebAssemblyDisassemblerEmitter.h"
 #include "X86DisassemblerTables.h"

@@ -74,7 +74,6 @@
 #include "llvm/Transforms/Instrumentation/InstrOrderFile.h"
 #include "llvm/Transforms/Instrumentation/InstrProfiling.h"
 #include "llvm/Transforms/Instrumentation/MemProfiler.h"
-#include "llvm/Transforms/Instrumentation/PGOCtxProfLowering.h"
 #include "llvm/Transforms/Instrumentation/PGOForceFunctionAttrs.h"
 #include "llvm/Transforms/Instrumentation/PGOInstrumentation.h"
 #include "llvm/Transforms/Scalar/ADCE.h"
@@ -653,13 +652,6 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   LPM2.addPass(LoopIdiomRecognizePass());
   LPM2.addPass(IndVarSimplifyPass());
 
-  {
-    ExtraSimpleLoopUnswitchPassManager ExtraPasses;
-    ExtraPasses.addPass(SimpleLoopUnswitchPass(/* NonTrivial */ Level ==
-                                               OptimizationLevel::O3));
-    LPM2.addPass(std::move(ExtraPasses));
-  }
-
   invokeLateLoopOptimizationsEPCallbacks(LPM2, Level);
 
   LPM2.addPass(LoopDeletionPass());
@@ -836,10 +828,6 @@ void PassBuilder::addPGOInstrPasses(ModulePassManager &MPM,
         PTO.EagerlyInvalidateAnalyses));
   }
 
-  if (PGOCtxProfLoweringPass::isContextualIRPGOEnabled()) {
-    MPM.addPass(PGOCtxProfLoweringPass());
-    return;
-  }
   // Add the profile lowering pass.
   InstrProfOptions Options;
   if (!ProfileFile.empty())
@@ -969,8 +957,7 @@ PassBuilder::buildInlinerPipeline(OptimizationLevel Level,
   MainCGPipeline.addPass(createCGSCCToFunctionPassAdaptor(
       RequireAnalysisPass<ShouldNotRunFunctionPassesAnalysis, Function>()));
 
-  if (Phase != ThinOrFullLTOPhase::ThinLTOPreLink)
-    MainCGPipeline.addPass(CoroSplitPass(Level != OptimizationLevel::O0));
+  MainCGPipeline.addPass(CoroSplitPass(Level != OptimizationLevel::O0));
 
   // Make sure we don't affect potential future NoRerun CGSCC adaptors.
   MIWP.addLateModulePass(createModuleToFunctionPassAdaptor(
@@ -1012,9 +999,8 @@ PassBuilder::buildModuleInlinerPipeline(OptimizationLevel Level,
       buildFunctionSimplificationPipeline(Level, Phase),
       PTO.EagerlyInvalidateAnalyses));
 
-  if (Phase != ThinOrFullLTOPhase::ThinLTOPreLink)
-    MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(
-        CoroSplitPass(Level != OptimizationLevel::O0)));
+  MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(
+      CoroSplitPass(Level != OptimizationLevel::O0)));
 
   return MPM;
 }
@@ -1177,7 +1163,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   if (EnableSyntheticCounts && !PGOOpt)
     MPM.addPass(SyntheticCountsPropagation());
 
-  if (EnablePGOForceFunctionAttrs && PGOOpt)
+  if (EnablePGOForceFunctionAttrs)
     MPM.addPass(PGOForceFunctionAttrsPass(PGOOpt->ColdOptType));
 
   MPM.addPass(AlwaysInlinerPass(/*InsertLifetimeIntrinsics=*/true));
@@ -1191,8 +1177,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   // and argument promotion.
   MPM.addPass(DeadArgumentEliminationPass());
 
-  if (Phase != ThinOrFullLTOPhase::ThinLTOPreLink)
-    MPM.addPass(CoroCleanupPass());
+  MPM.addPass(CoroCleanupPass());
 
   // Optimize globals now that functions are fully simplified.
   MPM.addPass(GlobalOptPass());

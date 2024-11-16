@@ -276,7 +276,8 @@ template <class ELFT> void MarkLive<ELFT>::run() {
     //   collection.
     // - Groups members are retained or discarded as a unit.
     if (!(sec->flags & SHF_ALLOC)) {
-      if (!isStaticRelSecType(sec->type) && !sec->nextInSectionGroup) {
+      bool isRel = sec->type == SHT_REL || sec->type == SHT_RELA;
+      if (!isRel && !sec->nextInSectionGroup) {
         sec->markLive();
         for (InputSection *isec : sec->dependentSections)
           isec->markLive();

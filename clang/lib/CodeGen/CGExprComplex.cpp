@@ -51,12 +51,11 @@ class ComplexExprEmitter
   CGBuilderTy &Builder;
   bool IgnoreReal;
   bool IgnoreImag;
-  bool FPHasBeenPromoted;
-
 public:
-  ComplexExprEmitter(CodeGenFunction &cgf, bool ir = false, bool ii = false)
-      : CGF(cgf), Builder(CGF.Builder), IgnoreReal(ir), IgnoreImag(ii),
-        FPHasBeenPromoted(false) {}
+  ComplexExprEmitter(CodeGenFunction &cgf, bool ir=false, bool ii=false)
+    : CGF(cgf), Builder(CGF.Builder), IgnoreReal(ir), IgnoreImag(ii) {
+  }
+
 
   //===--------------------------------------------------------------------===//
   //                               Utilities
@@ -288,54 +287,9 @@ public:
   ComplexPairTy EmitComplexBinOpLibCall(StringRef LibCallName,
                                         const BinOpInfo &Op);
 
-  QualType GetHigherPrecisionFPType(QualType ElementType) {
-    const auto *CurrentBT = cast<BuiltinType>(ElementType);
-    switch (CurrentBT->getKind()) {
-    case BuiltinType::Kind::Float16:
-      return CGF.getContext().FloatTy;
-    case BuiltinType::Kind::Float:
-    case BuiltinType::Kind::BFloat16:
-      return CGF.getContext().DoubleTy;
-    case BuiltinType::Kind::Double:
-      return CGF.getContext().LongDoubleTy;
-    default:
-      return ElementType;
-    }
-  }
-
-  QualType HigherPrecisionTypeForComplexArithmetic(QualType ElementType,
-                                                   bool IsDivOpCode) {
-    QualType HigherElementType = GetHigherPrecisionFPType(ElementType);
-    const llvm::fltSemantics &ElementTypeSemantics =
-        CGF.getContext().getFloatTypeSemantics(ElementType);
-    const llvm::fltSemantics &HigherElementTypeSemantics =
-        CGF.getContext().getFloatTypeSemantics(HigherElementType);
-    // Check that the promoted type can handle the intermediate values without
-    // overflowing. This can be interpreted as:
-    // (SmallerType.LargestFiniteVal * SmallerType.LargestFiniteVal) * 2 <=
-    // LargerType.LargestFiniteVal.
-    // In terms of exponent it gives this formula:
-    // (SmallerType.LargestFiniteVal * SmallerType.LargestFiniteVal
-    // doubles the exponent of SmallerType.LargestFiniteVal)
-    if (llvm::APFloat::semanticsMaxExponent(ElementTypeSemantics) * 2 + 1 <=
-        llvm::APFloat::semanticsMaxExponent(HigherElementTypeSemantics)) {
-      FPHasBeenPromoted = true;
-      return CGF.getContext().getComplexType(HigherElementType);
-    } else {
-      DiagnosticsEngine &Diags = CGF.CGM.getDiags();
-      Diags.Report(diag::warn_next_larger_fp_type_same_size_than_fp);
-      return QualType();
-    }
-  }
-
-  QualType getPromotionType(QualType Ty, bool IsDivOpCode = false) {
+  QualType getPromotionType(QualType Ty) {
     if (auto *CT = Ty->getAs<ComplexType>()) {
       QualType ElementType = CT->getElementType();
-      if (IsDivOpCode && ElementType->isFloatingType() &&
-          CGF.getLangOpts().getComplexRange() ==
-              LangOptions::ComplexRangeKind::CX_Promoted)
-        return HigherPrecisionTypeForComplexArithmetic(ElementType,
-                                                       IsDivOpCode);
       if (ElementType.UseExcessPrecision(CGF.getContext()))
         return CGF.getContext().getComplexType(CGF.getContext().FloatTy);
     }
@@ -346,12 +300,11 @@ public:
 
 #define HANDLEBINOP(OP)                                                        \
   ComplexPairTy VisitBin##OP(const BinaryOperator *E) {                        \
-    QualType promotionTy = getPromotionType(                                   \
-        E->getType(),                                                          \
-        (E->getOpcode() == BinaryOperatorKind::BO_Div) ? true : false);        \
+    QualType promotionTy = getPromotionType(E->getType());                     \
     ComplexPairTy result = EmitBin##OP(EmitBinOps(E, promotionTy));            \
     if (!promotionTy.isNull())                                                 \
-      result = CGF.EmitUnPromotedValue(result, E->getType());                  \
+      result =                                                                 \
+          CGF.EmitUnPromotedValue(result, E->getType());                       \
     return result;                                                             \
   }
 
@@ -616,7 +569,6 @@ ComplexPairTy ComplexExprEmitter::EmitCast(CastKind CK, Expr *Op,
   case CK_IntegralToFixedPoint:
   case CK_MatrixCast:
   case CK_HLSLVectorTruncation:
-  case CK_HLSLArrayRValue:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_FloatingRealToComplex:
@@ -842,9 +794,8 @@ ComplexPairTy ComplexExprEmitter::EmitBinMul(const BinOpInfo &Op) {
       ResR = Builder.CreateFSub(AC, BD, "mul_r");
       ResI = Builder.CreateFAdd(AD, BC, "mul_i");
 
-      if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Basic ||
-          Op.FPFeatures.getComplexRange() == LangOptions::CX_Improved ||
-          Op.FPFeatures.getComplexRange() == LangOptions::CX_Promoted)
+      if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Limited ||
+          Op.FPFeatures.getComplexRange() == LangOptions::CX_Fortran)
         return ComplexPairTy(ResR, ResI);
 
       // Emit the test for the real part becoming NaN and create a branch to
@@ -1035,16 +986,14 @@ ComplexPairTy ComplexExprEmitter::EmitBinDiv(const BinOpInfo &Op) {
     llvm::Value *OrigLHSi = LHSi;
     if (!LHSi)
       LHSi = llvm::Constant::getNullValue(RHSi->getType());
-    if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Improved ||
-        (Op.FPFeatures.getComplexRange() == LangOptions::CX_Promoted &&
-         !FPHasBeenPromoted))
+    if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Fortran)
       return EmitRangeReductionDiv(LHSr, LHSi, RHSr, RHSi);
-    else if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Basic ||
-             Op.FPFeatures.getComplexRange() == LangOptions::CX_Promoted)
+    else if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Limited)
       return EmitAlgebraicDiv(LHSr, LHSi, RHSr, RHSi);
-    // '-ffast-math' is used in the command line but followed by an
-    // '-fno-cx-limited-range' or '-fcomplex-arithmetic=full'.
-    else if (Op.FPFeatures.getComplexRange() == LangOptions::CX_Full) {
+    else if (!CGF.getLangOpts().FastMath ||
+             // '-ffast-math' is used in the command line but followed by an
+             // '-fno-cx-limited-range'.
+             Op.FPFeatures.getComplexRange() == LangOptions::CX_Full) {
       LHSi = OrigLHSi;
       // If we have a complex operand on the RHS and FastMath is not allowed, we
       // delegate to a libcall to handle all of the complexities and minimize

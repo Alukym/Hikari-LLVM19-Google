@@ -9,10 +9,9 @@
 #ifndef LLVM_LIBC_TEST_UNITTEST_FPEXCEPTMATCHER_H
 #define LLVM_LIBC_TEST_UNITTEST_FPEXCEPTMATCHER_H
 
-#include "test/UnitTest/Test.h"
-#include "test/UnitTest/TestLogger.h"
+#ifndef LIBC_COPT_TEST_USE_FUCHSIA
 
-#if LIBC_TEST_HAS_MATCHERS()
+#include "test/UnitTest/Test.h"
 
 namespace LIBC_NAMESPACE {
 namespace testing {
@@ -25,7 +24,7 @@ class FPExceptMatcher : public Matcher<bool> {
 public:
   class FunctionCaller {
   public:
-    virtual ~FunctionCaller() {}
+    virtual ~FunctionCaller(){};
     virtual void call() = 0;
   };
 
@@ -58,11 +57,8 @@ public:
       true,                                                                    \
       LIBC_NAMESPACE::testing::FPExceptMatcher(                                \
           LIBC_NAMESPACE::testing::FPExceptMatcher::getFunctionCaller(func)))
-
-#else // !LIBC_TEST_HAS_MATCHERS()
-
+#else
 #define ASSERT_RAISES_FP_EXCEPT(func) ASSERT_DEATH(func, WITH_SIGNAL(SIGFPE))
-
-#endif // LIBC_TEST_HAS_MATCHERS()
+#endif // LIBC_COPT_TEST_USE_FUCHSIA
 
 #endif // LLVM_LIBC_TEST_UNITTEST_FPEXCEPTMATCHER_H

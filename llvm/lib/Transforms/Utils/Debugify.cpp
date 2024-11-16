@@ -87,6 +87,10 @@ bool llvm::applyDebugifyMetadata(
     return false;
   }
 
+  bool NewDebugMode = M.IsNewDbgInfoFormat;
+  if (NewDebugMode)
+    M.convertFromNewDbgValues();
+
   DIBuilder DIB(M);
   LLVMContext &Ctx = M.getContext();
   auto *Int32Ty = Type::getInt32Ty(Ctx);
@@ -210,6 +214,9 @@ bool llvm::applyDebugifyMetadata(
   if (!M.getModuleFlag(DIVersionKey))
     M.addModuleFlag(Module::Warning, DIVersionKey, DEBUG_METADATA_VERSION);
 
+  if (NewDebugMode)
+    M.convertToNewDbgValues();
+
   return true;
 }
 
@@ -304,6 +311,10 @@ bool llvm::collectDebugInfoMetadata(Module &M,
     return false;
   }
 
+  bool NewDebugMode = M.IsNewDbgInfoFormat;
+  if (NewDebugMode)
+    M.convertFromNewDbgValues();
+
   uint64_t FunctionsCnt = DebugInfoBeforePass.DIFunctions.size();
   // Visit each instruction.
   for (Function &F : Functions) {
@@ -338,23 +349,20 @@ bool llvm::collectDebugInfoMetadata(Module &M,
 
         // Cllect dbg.values and dbg.declare.
         if (DebugifyLevel > Level::Locations) {
-          auto HandleDbgVariable = [&](auto *DbgVar) {
+          if (auto *DVI = dyn_cast<DbgVariableIntrinsic>(&I)) {
             if (!SP)
-              return;
+              continue;
             // Skip inlined variables.
-            if (DbgVar->getDebugLoc().getInlinedAt())
-              return;
+            if (I.getDebugLoc().getInlinedAt())
+              continue;
             // Skip undef values.
-            if (DbgVar->isKillLocation())
-              return;
+            if (DVI->isKillLocation())
+              continue;
 
-            auto *Var = DbgVar->getVariable();
+            auto *Var = DVI->getVariable();
             DebugInfoBeforePass.DIVariables[Var]++;
-          };
-          for (DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
-            HandleDbgVariable(&DVR);
-          if (auto *DVI = dyn_cast<DbgVariableIntrinsic>(&I))
-            HandleDbgVariable(DVI);
+            continue;
+          }
         }
 
         // Skip debug instructions other than dbg.value and dbg.declare.
@@ -370,6 +378,9 @@ bool llvm::collectDebugInfoMetadata(Module &M,
       }
     }
   }
+
+  if (NewDebugMode)
+    M.convertToNewDbgValues();
 
   return true;
 }
@@ -550,6 +561,10 @@ bool llvm::checkDebugInfoMetadata(Module &M,
     return false;
   }
 
+  bool NewDebugMode = M.IsNewDbgInfoFormat;
+  if (NewDebugMode)
+    M.convertFromNewDbgValues();
+
   // Map the debug info holding DIs after a pass.
   DebugInfoPerPass DebugInfoAfterPass;
 
@@ -584,23 +599,20 @@ bool llvm::checkDebugInfoMetadata(Module &M,
 
         // Collect dbg.values and dbg.declares.
         if (DebugifyLevel > Level::Locations) {
-          auto HandleDbgVariable = [&](auto *DbgVar) {
+          if (auto *DVI = dyn_cast<DbgVariableIntrinsic>(&I)) {
             if (!SP)
-              return;
+              continue;
             // Skip inlined variables.
-            if (DbgVar->getDebugLoc().getInlinedAt())
-              return;
+            if (I.getDebugLoc().getInlinedAt())
+              continue;
             // Skip undef values.
-            if (DbgVar->isKillLocation())
-              return;
+            if (DVI->isKillLocation())
+              continue;
 
-            auto *Var = DbgVar->getVariable();
+            auto *Var = DVI->getVariable();
             DebugInfoAfterPass.DIVariables[Var]++;
-          };
-          for (DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
-            HandleDbgVariable(&DVR);
-          if (auto *DVI = dyn_cast<DbgVariableIntrinsic>(&I))
-            HandleDbgVariable(DVI);
+            continue;
+          }
         }
 
         // Skip debug instructions other than dbg.value and dbg.declare.
@@ -663,14 +675,16 @@ bool llvm::checkDebugInfoMetadata(Module &M,
   // the debugging information from the previous pass.
   DebugInfoBeforePass = DebugInfoAfterPass;
 
+  if (NewDebugMode)
+    M.convertToNewDbgValues();
+
   LLVM_DEBUG(dbgs() << "\n\n");
   return Result;
 }
 
 namespace {
-/// Return true if a mis-sized diagnostic is issued for \p DbgVal.
-template <typename DbgValTy>
-bool diagnoseMisSizedDbgValue(Module &M, DbgValTy *DbgVal) {
+/// Return true if a mis-sized diagnostic is issued for \p DVI.
+bool diagnoseMisSizedDbgValue(Module &M, DbgValueInst *DVI) {
   // The size of a dbg.value's value operand should match the size of the
   // variable it corresponds to.
   //
@@ -679,22 +693,22 @@ bool diagnoseMisSizedDbgValue(Module &M, DbgValTy *DbgVal) {
 
   // For now, don't try to interpret anything more complicated than an empty
   // DIExpression. Eventually we should try to handle OP_deref and fragments.
-  if (DbgVal->getExpression()->getNumElements())
+  if (DVI->getExpression()->getNumElements())
     return false;
 
-  Value *V = DbgVal->getVariableLocationOp(0);
+  Value *V = DVI->getVariableLocationOp(0);
   if (!V)
     return false;
 
   Type *Ty = V->getType();
   uint64_t ValueOperandSize = getAllocSizeInBits(M, Ty);
-  std::optional<uint64_t> DbgVarSize = DbgVal->getFragmentSizeInBits();
+  std::optional<uint64_t> DbgVarSize = DVI->getFragmentSizeInBits();
   if (!ValueOperandSize || !DbgVarSize)
     return false;
 
   bool HasBadSize = false;
   if (Ty->isIntegerTy()) {
-    auto Signedness = DbgVal->getVariable()->getSignedness();
+    auto Signedness = DVI->getVariable()->getSignedness();
     if (Signedness && *Signedness == DIBasicType::Signedness::Signed)
       HasBadSize = ValueOperandSize < *DbgVarSize;
   } else {
@@ -704,7 +718,7 @@ bool diagnoseMisSizedDbgValue(Module &M, DbgValTy *DbgVal) {
   if (HasBadSize) {
     dbg() << "ERROR: dbg.value operand has size " << ValueOperandSize
           << ", but its variable has size " << *DbgVarSize << ": ";
-    DbgVal->print(dbg());
+    DVI->print(dbg());
     dbg() << "\n";
   }
   return HasBadSize;
@@ -720,6 +734,10 @@ bool checkDebugifyMetadata(Module &M,
     dbg() << Banner << ": Skipping module without debugify metadata\n";
     return false;
   }
+
+  bool NewDebugMode = M.IsNewDbgInfoFormat;
+  if (NewDebugMode)
+    M.convertFromNewDbgValues();
 
   auto getDebugifyOperand = [&](unsigned Idx) -> unsigned {
     return mdconst::extract<ConstantInt>(NMD->getOperand(Idx)->getOperand(0))
@@ -762,23 +780,18 @@ bool checkDebugifyMetadata(Module &M,
     }
 
     // Find missing variables and mis-sized debug values.
-    auto CheckForMisSized = [&](auto *DbgVal) {
-      unsigned Var = ~0U;
-      (void)to_integer(DbgVal->getVariable()->getName(), Var, 10);
-      assert(Var <= OriginalNumVars && "Unexpected name for DILocalVariable");
-      bool HasBadSize = diagnoseMisSizedDbgValue(M, DbgVal);
-      if (!HasBadSize)
-        MissingVars.reset(Var - 1);
-      HasErrors |= HasBadSize;
-    };
     for (Instruction &I : instructions(F)) {
-      for (DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
-        if (DVR.isDbgValue() || DVR.isDbgAssign())
-          CheckForMisSized(&DVR);
       auto *DVI = dyn_cast<DbgValueInst>(&I);
       if (!DVI)
         continue;
-      CheckForMisSized(DVI);
+
+      unsigned Var = ~0U;
+      (void)to_integer(DVI->getVariable()->getName(), Var, 10);
+      assert(Var <= OriginalNumVars && "Unexpected name for DILocalVariable");
+      bool HasBadSize = diagnoseMisSizedDbgValue(M, DVI);
+      if (!HasBadSize)
+        MissingVars.reset(Var - 1);
+      HasErrors |= HasBadSize;
     }
   }
 
@@ -806,6 +819,9 @@ bool checkDebugifyMetadata(Module &M,
   bool Ret = false;
   if (Strip)
     Ret = stripDebugifyMetadata(M);
+
+  if (NewDebugMode)
+    M.convertToNewDbgValues();
 
   return Ret;
 }
@@ -1036,6 +1052,10 @@ FunctionPass *createCheckDebugifyFunctionPass(
 
 PreservedAnalyses NewPMCheckDebugifyPass::run(Module &M,
                                               ModuleAnalysisManager &) {
+  bool NewDebugMode = M.IsNewDbgInfoFormat;
+  if (NewDebugMode)
+    M.convertFromNewDbgValues();
+
   if (Mode == DebugifyMode::SyntheticDebugInfo)
     checkDebugifyMetadata(M, M.functions(), NameOfWrappedPass,
                                    "CheckModuleDebugify", Strip, StatsMap);
@@ -1044,6 +1064,9 @@ PreservedAnalyses NewPMCheckDebugifyPass::run(Module &M,
       M, M.functions(), *DebugInfoBeforePass,
       "CheckModuleDebugify (original debuginfo)", NameOfWrappedPass,
       OrigDIVerifyBugsReportFilePath);
+
+  if (NewDebugMode)
+    M.convertToNewDbgValues();
 
   return PreservedAnalyses::all();
 }

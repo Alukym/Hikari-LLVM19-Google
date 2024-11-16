@@ -116,7 +116,6 @@ static bool isTypeTag(uint16_t Tag) {
   case dwarf::DW_TAG_string_type:
   case dwarf::DW_TAG_structure_type:
   case dwarf::DW_TAG_subroutine_type:
-  case dwarf::DW_TAG_template_alias:
   case dwarf::DW_TAG_typedef:
   case dwarf::DW_TAG_union_type:
   case dwarf::DW_TAG_ptr_to_member_type:
@@ -2702,8 +2701,8 @@ Error DWARFLinker::link() {
   // This Dwarf string pool which is used for emission. It must be used
   // serially as the order of calling getStringOffset matters for
   // reproducibility.
-  OffsetsStringPool DebugStrPool(true);
-  OffsetsStringPool DebugLineStrPool(false);
+  OffsetsStringPool DebugStrPool(StringsTranslator, true);
+  OffsetsStringPool DebugLineStrPool(StringsTranslator, false);
   DebugDieValuePool StringOffsetPool;
 
   // ODR Contexts for the optimize.

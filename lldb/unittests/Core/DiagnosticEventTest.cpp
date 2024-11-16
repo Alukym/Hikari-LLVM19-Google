@@ -55,8 +55,9 @@ TEST_F(DiagnosticEventTest, Warning) {
   ListenerSP listener_sp = Listener::MakeListener("test-listener");
 
   listener_sp->StartListeningForEvents(&broadcaster,
-                                       lldb::eBroadcastBitWarning);
-  EXPECT_TRUE(broadcaster.EventTypeHasListeners(lldb::eBroadcastBitWarning));
+                                       Debugger::eBroadcastBitWarning);
+  EXPECT_TRUE(
+      broadcaster.EventTypeHasListeners(Debugger::eBroadcastBitWarning));
 
   Debugger::ReportWarning("foo", debugger_sp->GetID());
 
@@ -79,8 +80,9 @@ TEST_F(DiagnosticEventTest, Error) {
   Broadcaster &broadcaster = debugger_sp->GetBroadcaster();
   ListenerSP listener_sp = Listener::MakeListener("test-listener");
 
-  listener_sp->StartListeningForEvents(&broadcaster, lldb::eBroadcastBitError);
-  EXPECT_TRUE(broadcaster.EventTypeHasListeners(lldb::eBroadcastBitError));
+  listener_sp->StartListeningForEvents(&broadcaster,
+                                       Debugger::eBroadcastBitError);
+  EXPECT_TRUE(broadcaster.EventTypeHasListeners(Debugger::eBroadcastBitError));
 
   Debugger::ReportError("bar", debugger_sp->GetID());
 
@@ -109,7 +111,7 @@ TEST_F(DiagnosticEventTest, MultipleDebuggers) {
     listeners.push_back(listener);
 
     listener->StartListeningForEvents(&debugger->GetBroadcaster(),
-                                      lldb::eBroadcastBitError);
+                                      Debugger::eBroadcastBitError);
   }
 
   Debugger::ReportError("baz");
@@ -138,8 +140,9 @@ TEST_F(DiagnosticEventTest, WarningOnce) {
   ListenerSP listener_sp = Listener::MakeListener("test-listener");
 
   listener_sp->StartListeningForEvents(&broadcaster,
-                                       lldb::eBroadcastBitWarning);
-  EXPECT_TRUE(broadcaster.EventTypeHasListeners(lldb::eBroadcastBitWarning));
+                                       Debugger::eBroadcastBitWarning);
+  EXPECT_TRUE(
+      broadcaster.EventTypeHasListeners(Debugger::eBroadcastBitWarning));
 
   std::once_flag once;
   Debugger::ReportWarning("foo", debugger_sp->GetID(), &once);

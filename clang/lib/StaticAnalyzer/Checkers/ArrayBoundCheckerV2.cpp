@@ -83,8 +83,6 @@ public:
     AssumedUpperBound = UpperBoundVal;
   }
 
-  bool assumedNonNegative() { return AssumedNonNegative; }
-
   const NoteTag *createNoteTag(CheckerContext &C) const;
 
 private:
@@ -404,8 +402,7 @@ static bool tryDividePair(std::optional<int64_t> &Val1,
 }
 
 static Messages getExceedsMsgs(ASTContext &ACtx, const SubRegion *Region,
-                               NonLoc Offset, NonLoc Extent, SVal Location,
-                               bool AlsoMentionUnderflow) {
+                               NonLoc Offset, NonLoc Extent, SVal Location) {
   std::string RegName = getRegionName(Region);
   const auto *EReg = Location.getAsRegion()->getAs<ElementRegion>();
   assert(EReg && "this checker only handles element access");
@@ -417,7 +414,6 @@ static Messages getExceedsMsgs(ASTContext &ACtx, const SubRegion *Region,
   int64_t ElemSize = ACtx.getTypeSizeInChars(ElemType).getQuantity();
 
   bool UseByteOffsets = !tryDividePair(OffsetN, ExtentN, ElemSize);
-  const char *OffsetOrIndex = UseByteOffsets ? "byte offset" : "index";
 
   SmallString<256> Buf;
   llvm::raw_svector_ostream Out(Buf);
@@ -425,12 +421,10 @@ static Messages getExceedsMsgs(ASTContext &ACtx, const SubRegion *Region,
   if (!ExtentN && !UseByteOffsets)
     Out << "'" << ElemType.getAsString() << "' element in ";
   Out << RegName << " at ";
-  if (AlsoMentionUnderflow) {
-    Out << "a negative or overflowing " << OffsetOrIndex;
-  } else if (OffsetN) {
-    Out << OffsetOrIndex << " " << *OffsetN;
+  if (OffsetN) {
+    Out << (UseByteOffsets ? "byte offset " : "index ") << *OffsetN;
   } else {
-    Out << "an overflowing " << OffsetOrIndex;
+    Out << "an overflowing " << (UseByteOffsets ? "byte offset" : "index");
   }
   if (ExtentN) {
     Out << ", while it holds only ";
@@ -447,20 +441,17 @@ static Messages getExceedsMsgs(ASTContext &ACtx, const SubRegion *Region,
       Out << "s";
   }
 
-  return {formatv("Out of bound access to memory {0} {1}",
-                  AlsoMentionUnderflow ? "around" : "after the end of",
-                  RegName),
-          std::string(Buf)};
+  return {
+      formatv("Out of bound access to memory after the end of {0}", RegName),
+      std::string(Buf)};
 }
 
-static Messages getTaintMsgs(const SubRegion *Region, const char *OffsetName,
-                             bool AlsoMentionUnderflow) {
+static Messages getTaintMsgs(const SubRegion *Region, const char *OffsetName) {
   std::string RegName = getRegionName(Region);
   return {formatv("Potential out of bound access to {0} with tainted {1}",
                   RegName, OffsetName),
-          formatv("Access of {0} with a tainted {1} that may be {2}too large",
-                  RegName, OffsetName,
-                  AlsoMentionUnderflow ? "negative or " : "")};
+          formatv("Access of {0} with a tainted {1} that may be too large",
+                  RegName, OffsetName)};
 }
 
 const NoteTag *StateUpdateReporter::createNoteTag(CheckerContext &C) const {
@@ -609,13 +600,6 @@ void ArrayBoundCheckerV2::performCheck(const Expr *E, CheckerContext &C) const {
   // CHECK UPPER BOUND
   DefinedOrUnknownSVal Size = getDynamicExtent(State, Reg, SVB);
   if (auto KnownSize = Size.getAs<NonLoc>()) {
-    // In a situation where both overflow and overflow are possible (but the
-    // index is either tainted or known to be invalid), the logic of this
-    // checker will first assume that the offset is non-negative, and then
-    // (with this additional assumption) it will detect an overflow error.
-    // In this situation the warning message should mention both possibilities.
-    bool AlsoMentionUnderflow = SUR.assumedNonNegative();
-
     auto [WithinUpperBound, ExceedsUpperBound] =
         compareValueToThreshold(State, ByteOffset, *KnownSize, SVB);
 
@@ -631,9 +615,8 @@ void ArrayBoundCheckerV2::performCheck(const Expr *E, CheckerContext &C) const {
           return;
         }
 
-        Messages Msgs =
-            getExceedsMsgs(C.getASTContext(), Reg, ByteOffset, *KnownSize,
-                           Location, AlsoMentionUnderflow);
+        Messages Msgs = getExceedsMsgs(C.getASTContext(), Reg, ByteOffset,
+                                       *KnownSize, Location);
         reportOOB(C, ExceedsUpperBound, Msgs, ByteOffset, KnownSize);
         return;
       }
@@ -649,7 +632,7 @@ void ArrayBoundCheckerV2::performCheck(const Expr *E, CheckerContext &C) const {
           if (isTainted(State, ASE->getIdx(), C.getLocationContext()))
             OffsetName = "index";
 
-        Messages Msgs = getTaintMsgs(Reg, OffsetName, AlsoMentionUnderflow);
+        Messages Msgs = getTaintMsgs(Reg, OffsetName);
         reportOOB(C, ExceedsUpperBound, Msgs, ByteOffset, KnownSize,
                   /*IsTaintBug=*/true);
         return;

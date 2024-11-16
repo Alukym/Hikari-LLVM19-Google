@@ -631,7 +631,8 @@ static Value createMaskNeutralValue(ConversionPatternRewriter &rewriter,
                                     Type vectorType) {
   const auto &floatSemantics = cast<FloatType>(llvmType).getFloatSemantics();
   auto value = getMaskNeutralValue(MaskNeutral{}, floatSemantics);
-  auto denseValue = DenseElementsAttr::get(cast<ShapedType>(vectorType), value);
+  auto denseValue =
+      DenseElementsAttr::get(vectorType.cast<ShapedType>(), value);
   return rewriter.create<LLVM::ConstantOp>(loc, vectorType, denseValue);
 }
 
@@ -1081,8 +1082,14 @@ public:
     if (!llvmResultType)
       return failure();
 
-    SmallVector<OpFoldResult> positionVec = getMixedValues(
-        adaptor.getStaticPosition(), adaptor.getDynamicPosition(), rewriter);
+    SmallVector<OpFoldResult> positionVec;
+    for (auto [idx, pos] : llvm::enumerate(extractOp.getMixedPosition())) {
+      if (pos.is<Value>())
+        // Make sure we use the value that has been already converted to LLVM.
+        positionVec.push_back(adaptor.getDynamicPosition()[idx]);
+      else
+        positionVec.push_back(pos);
+    }
 
     // Extract entire vector. Should be handled by folder, but just to be safe.
     ArrayRef<OpFoldResult> position(positionVec);
@@ -1202,8 +1209,14 @@ public:
     if (!llvmResultType)
       return failure();
 
-    SmallVector<OpFoldResult> positionVec = getMixedValues(
-        adaptor.getStaticPosition(), adaptor.getDynamicPosition(), rewriter);
+    SmallVector<OpFoldResult> positionVec;
+    for (auto [idx, pos] : llvm::enumerate(insertOp.getMixedPosition())) {
+      if (pos.is<Value>())
+        // Make sure we use the value that has been already converted to LLVM.
+        positionVec.push_back(adaptor.getDynamicPosition()[idx]);
+      else
+        positionVec.push_back(pos);
+    }
 
     // Overwrite entire vector with value. Should be handled by folder, but
     // just to be safe.
@@ -1738,7 +1751,7 @@ struct VectorInterleaveOpLowering
                                          "InterleaveOp not rank 1");
     // If the result is rank 1, then this directly maps to LLVM.
     if (resultType.isScalable()) {
-      rewriter.replaceOpWithNewOp<LLVM::vector_interleave2>(
+      rewriter.replaceOpWithNewOp<LLVM::experimental_vector_interleave2>(
           interleaveOp, typeConverter->convertType(resultType),
           adaptor.getLhs(), adaptor.getRhs());
       return success();

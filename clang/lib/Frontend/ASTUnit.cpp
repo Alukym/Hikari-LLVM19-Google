@@ -1067,7 +1067,7 @@ public:
 
   std::vector<Decl *> takeTopLevelDecls() { return std::move(TopLevelDecls); }
 
-  std::vector<LocalDeclID> takeTopLevelDeclIDs() {
+  std::vector<serialization::DeclID> takeTopLevelDeclIDs() {
     return std::move(TopLevelDeclIDs);
   }
 
@@ -1101,7 +1101,7 @@ public:
 private:
   unsigned Hash = 0;
   std::vector<Decl *> TopLevelDecls;
-  std::vector<LocalDeclID> TopLevelDeclIDs;
+  std::vector<serialization::DeclID> TopLevelDeclIDs;
   llvm::SmallVector<ASTUnit::StandaloneDiagnostic, 4> PreambleDiags;
 };
 
@@ -1467,12 +1467,11 @@ void ASTUnit::RealizeTopLevelDeclsFromPreamble() {
 
   std::vector<Decl *> Resolved;
   Resolved.reserve(TopLevelDeclsInPreamble.size());
-  // The module file of the preamble.
-  serialization::ModuleFile &MF = Reader->getModuleManager().getPrimaryModule();
+  ExternalASTSource &Source = *getASTContext().getExternalSource();
   for (const auto TopLevelDecl : TopLevelDeclsInPreamble) {
     // Resolve the declaration ID to an actual declaration, possibly
     // deserializing the declaration in the process.
-    if (Decl *D = Reader->GetDecl(Reader->getGlobalDeclID(MF, TopLevelDecl)))
+    if (Decl *D = Source.GetExternalDecl(TopLevelDecl))
       Resolved.push_back(D);
   }
   TopLevelDeclsInPreamble.clear();
@@ -2373,6 +2372,8 @@ bool ASTUnit::serialize(raw_ostream &OS) {
   ASTWriter Writer(Stream, Buffer, ModuleCache, {});
   return serializeUnit(Writer, Buffer, getSema(), OS);
 }
+
+using SLocRemap = ContinuousRangeMap<unsigned, int, 2>;
 
 void ASTUnit::TranslateStoredDiagnostics(
                           FileManager &FileMgr,

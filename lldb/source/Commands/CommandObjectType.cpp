@@ -2509,7 +2509,7 @@ protected:
     if (!frame)
       return lang_type;
 
-    lang_type = frame->GuessLanguage().AsLanguageType();
+    lang_type = frame->GuessLanguage();
     if (lang_type != lldb::eLanguageTypeUnknown)
       return lang_type;
 

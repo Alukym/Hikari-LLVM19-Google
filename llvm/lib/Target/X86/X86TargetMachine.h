@@ -60,7 +60,7 @@ public:
 
   Error buildCodeGenPipeline(ModulePassManager &, raw_pwrite_stream &,
                              raw_pwrite_stream *, CodeGenFileType,
-                             const CGPassBuilderOption &,
+                             CGPassBuilderOption,
                              PassInstrumentationCallbacks *) override;
 
   bool isJIT() const { return IsJIT; }

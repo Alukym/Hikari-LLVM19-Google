@@ -108,16 +108,25 @@ TargetPassConfig *BPFTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new BPFPassConfig(*this, PM);
 }
 
-static Expected<bool> parseBPFPreserveStaticOffsetOptions(StringRef Params) {
-  return PassBuilder::parseSinglePassOption(Params, "allow-partial",
-                                            "BPFPreserveStaticOffsetPass");
-}
-
 void BPFTargetMachine::registerPassBuilderCallbacks(
     PassBuilder &PB, bool PopulateClassToPassNames) {
-#define GET_PASS_REGISTRY "BPFPassRegistry.def"
-#include "llvm/Passes/TargetPassRegistry.inc"
-
+  PB.registerPipelineParsingCallback(
+      [](StringRef PassName, FunctionPassManager &FPM,
+         ArrayRef<PassBuilder::PipelineElement>) {
+        if (PassName == "bpf-ir-peephole") {
+          FPM.addPass(BPFIRPeepholePass());
+          return true;
+        }
+        if (PassName == "bpf-preserve-static-offset") {
+          FPM.addPass(BPFPreserveStaticOffsetPass(false));
+          return true;
+        }
+        if (PassName == "bpf-aspace-simplify") {
+          FPM.addPass(BPFASpaceCastSimplifyPass());
+          return true;
+        }
+        return false;
+      });
   PB.registerPipelineStartEPCallback(
       [=](ModulePassManager &MPM, OptimizationLevel) {
         FunctionPassManager FPM;

@@ -320,9 +320,9 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
 
   unsigned NumVariadicOps = MCI.getNumOperands() - MCDesc.getNumOperands();
   ID.Writes.resize(TotalDefs + NumVariadicOps);
-  // Iterate over the operands list, and skip non-register or constant register
-  // operands. The first NumExplicitDefs register operands are expected to be
-  // register definitions.
+  // Iterate over the operands list, and skip non-register operands.
+  // The first NumExplicitDefs register operands are expected to be register
+  // definitions.
   unsigned CurrentDef = 0;
   unsigned OptionalDefIdx = MCDesc.getNumOperands() - 1;
   unsigned i = 0;
@@ -333,10 +333,6 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
 
     if (MCDesc.operands()[CurrentDef].isOptionalDef()) {
       OptionalDefIdx = CurrentDef++;
-      continue;
-    }
-    if (MRI.isConstant(Op.getReg())) {
-      CurrentDef++;
       continue;
     }
 
@@ -417,8 +413,6 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
     const MCOperand &Op = MCI.getOperand(OpIndex);
     if (!Op.isReg())
       continue;
-    if (MRI.isConstant(Op.getReg()))
-      continue;
 
     WriteDescriptor &Write = ID.Writes[CurrentDef];
     Write.OpIndex = OpIndex;
@@ -454,8 +448,6 @@ void InstrBuilder::populateReads(InstrDesc &ID, const MCInst &MCI,
     const MCOperand &Op = MCI.getOperand(OpIndex);
     if (!Op.isReg())
       continue;
-    if (MRI.isConstant(Op.getReg()))
-      continue;
 
     ReadDescriptor &Read = ID.Reads[CurrentUse];
     Read.OpIndex = OpIndex;
@@ -473,8 +465,6 @@ void InstrBuilder::populateReads(InstrDesc &ID, const MCInst &MCI,
     Read.OpIndex = ~I;
     Read.UseIndex = NumExplicitUses + I;
     Read.RegisterID = MCDesc.implicit_uses()[I];
-    if (MRI.isConstant(Read.RegisterID))
-      continue;
     Read.SchedClassID = SchedClassID;
     LLVM_DEBUG(dbgs() << "\t\t[Use][I] OpIdx=" << ~Read.OpIndex
                       << ", UseIndex=" << Read.UseIndex << ", RegisterID="
@@ -552,7 +542,8 @@ InstrBuilder::createInstrDescImpl(const MCInst &MCI,
   const MCSchedClassDesc &SCDesc = *SM.getSchedClassDesc(SchedClassID);
   if (SCDesc.NumMicroOps == MCSchedClassDesc::InvalidNumMicroOps) {
     return make_error<InstructionError<MCInst>>(
-        "found an unsupported instruction in the input assembly sequence", MCI);
+        "found an unsupported instruction in the input assembly sequence.",
+        MCI);
   }
 
   LLVM_DEBUG(dbgs() << "\n\t\tOpcode Name= " << MCII.getName(Opcode) << '\n');
@@ -757,9 +748,8 @@ InstrBuilder::createInstruction(const MCInst &MCI,
   for (const WriteDescriptor &WD : D.Writes) {
     RegID = WD.isImplicitWrite() ? WD.RegisterID
                                  : MCI.getOperand(WD.OpIndex).getReg();
-    // Check if this is a optional definition that references NoReg or a write
-    // to a constant register.
-    if ((WD.IsOptionalDef && !RegID) || MRI.isConstant(RegID)) {
+    // Check if this is a optional definition that references NoReg.
+    if (WD.IsOptionalDef && !RegID) {
       ++WriteIndex;
       continue;
     }

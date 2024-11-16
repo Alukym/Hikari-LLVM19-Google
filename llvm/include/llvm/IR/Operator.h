@@ -64,10 +64,9 @@ public:
   /// to evaluate to poison despite having non-poison inputs.
   bool hasPoisonGeneratingFlags() const;
 
-  /// Return true if this operator has poison-generating flags,
-  /// return attributes or metadata. The latter two is only possible for
-  /// instructions.
-  bool hasPoisonGeneratingAnnotations() const;
+  /// Return true if this operator has poison-generating flags or metadata.
+  /// The latter is only possible for instructions.
+  bool hasPoisonGeneratingFlagsOrMetadata() const;
 };
 
 /// Utility class for integer operators which may exhibit overflow - Add, Sub,
@@ -405,6 +404,7 @@ class GEPOperator
 
   enum {
     IsInBounds = (1 << 0),
+    // InRangeIndex: bits 1-6
   };
 
   void setIsInBounds(bool B) {
@@ -423,7 +423,11 @@ public:
 
   /// Returns the offset of the index with an inrange attachment, or
   /// std::nullopt if none.
-  std::optional<ConstantRange> getInRange() const;
+  std::optional<unsigned> getInRangeIndex() const {
+    if (SubclassOptionalData >> 1 == 0)
+      return std::nullopt;
+    return (SubclassOptionalData >> 1) - 1;
+  }
 
   inline op_iterator       idx_begin()       { return op_begin()+1; }
   inline const_op_iterator idx_begin() const { return op_begin()+1; }

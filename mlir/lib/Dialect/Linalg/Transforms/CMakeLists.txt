@@ -22,13 +22,10 @@ add_mlir_dialect_library(MLIRLinalgTransforms
   InlineScalarOperands.cpp
   Interchange.cpp
   Loops.cpp
-  TransposeMatmul.cpp
   MeshShardingInterfaceImpl.cpp
   NamedOpConversions.cpp
-  BlockPackMatmul.cpp
   Padding.cpp
   Promotion.cpp
-  RuntimeOpVerification.cpp
   Specialize.cpp
   Split.cpp
   SplitReduction.cpp
@@ -62,7 +59,6 @@ add_mlir_dialect_library(MLIRLinalgTransforms
   MLIRFuncDialect
   MLIRFuncToLLVM
   MLIRFuncTransforms
-  MLIRIndexDialect
   MLIRInferTypeOpInterface
   MLIRIR
   MLIRMemRefDialect

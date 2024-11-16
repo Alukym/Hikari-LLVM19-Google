@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "exp_utils.h"
+#include "math_utils.h"
 
 namespace LIBC_NAMESPACE {
 

@@ -52,54 +52,49 @@ static void applyNullability(Sema &S, Decl *D, NullabilityKind Nullability,
   if (!Metadata.IsActive)
     return;
 
-  auto GetModified =
-      [&](Decl *D, QualType QT,
-          NullabilityKind Nullability) -> std::optional<QualType> {
+  auto IsModified = [&](Decl *D, QualType QT,
+                        NullabilityKind Nullability) -> bool {
     QualType Original = QT;
     S.CheckImplicitNullabilityTypeSpecifier(QT, Nullability, D->getLocation(),
                                             isa<ParmVarDecl>(D),
                                             /*OverrideExisting=*/true);
-    return (QT.getTypePtr() != Original.getTypePtr()) ? std::optional(QT)
-                                                      : std::nullopt;
+    return QT.getTypePtr() != Original.getTypePtr();
   };
 
   if (auto Function = dyn_cast<FunctionDecl>(D)) {
-    if (auto Modified =
-            GetModified(D, Function->getReturnType(), Nullability)) {
-      const FunctionType *FnType = Function->getType()->castAs<FunctionType>();
-      if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(FnType))
-        Function->setType(S.Context.getFunctionType(
-            *Modified, proto->getParamTypes(), proto->getExtProtoInfo()));
-      else
-        Function->setType(
-            S.Context.getFunctionNoProtoType(*Modified, FnType->getExtInfo()));
+    if (IsModified(D, Function->getReturnType(), Nullability)) {
+      QualType FnType = Function->getType();
+      Function->setType(FnType);
     }
   } else if (auto Method = dyn_cast<ObjCMethodDecl>(D)) {
-    if (auto Modified = GetModified(D, Method->getReturnType(), Nullability)) {
-      Method->setReturnType(*Modified);
+    QualType Type = Method->getReturnType();
+    if (IsModified(D, Type, Nullability)) {
+      Method->setReturnType(Type);
 
       // Make it a context-sensitive keyword if we can.
-      if (!isIndirectPointerType(*Modified))
+      if (!isIndirectPointerType(Type))
         Method->setObjCDeclQualifier(Decl::ObjCDeclQualifier(
             Method->getObjCDeclQualifier() | Decl::OBJC_TQ_CSNullability));
     }
   } else if (auto Value = dyn_cast<ValueDecl>(D)) {
-    if (auto Modified = GetModified(D, Value->getType(), Nullability)) {
-      Value->setType(*Modified);
+    QualType Type = Value->getType();
+    if (IsModified(D, Type, Nullability)) {
+      Value->setType(Type);
 
       // Make it a context-sensitive keyword if we can.
       if (auto Parm = dyn_cast<ParmVarDecl>(D)) {
-        if (Parm->isObjCMethodParameter() && !isIndirectPointerType(*Modified))
+        if (Parm->isObjCMethodParameter() && !isIndirectPointerType(Type))
           Parm->setObjCDeclQualifier(Decl::ObjCDeclQualifier(
               Parm->getObjCDeclQualifier() | Decl::OBJC_TQ_CSNullability));
       }
     }
   } else if (auto Property = dyn_cast<ObjCPropertyDecl>(D)) {
-    if (auto Modified = GetModified(D, Property->getType(), Nullability)) {
-      Property->setType(*Modified, Property->getTypeSourceInfo());
+    QualType Type = Property->getType();
+    if (IsModified(D, Type, Nullability)) {
+      Property->setType(Type, Property->getTypeSourceInfo());
 
       // Make it a property attribute if we can.
-      if (!isIndirectPointerType(*Modified))
+      if (!isIndirectPointerType(Type))
         Property->setPropertyAttributes(
             ObjCPropertyAttribute::kind_null_resettable);
     }
@@ -463,8 +458,6 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
     D = MD;
   }
 
-  assert((FD || MD) && "Expecting Function or ObjCMethod");
-
   // Nullability of return type.
   if (Info.NullabilityAudited)
     applyNullability(S, D, Info.getReturnTypeInfo(), Metadata);
@@ -593,11 +586,6 @@ static void ProcessAPINotes(Sema &S, TagDecl *D, const api_notes::TagInfo &Info,
   if (auto ReleaseOp = Info.SwiftReleaseOp)
     D->addAttr(
         SwiftAttrAttr::Create(S.Context, "release:" + ReleaseOp.value()));
-
-  if (auto Copyable = Info.isSwiftCopyable()) {
-    if (!*Copyable)
-      D->addAttr(SwiftAttrAttr::Create(S.Context, "~Copyable"));
-  }
 
   if (auto Extensibility = Info.EnumExtensibility) {
     using api_notes::EnumExtensibilityKind;

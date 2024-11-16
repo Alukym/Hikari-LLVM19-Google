@@ -25,7 +25,6 @@
 #include "../misc/StaticAssertCheck.h"
 #include "../misc/ThrowByValueCatchByReferenceCheck.h"
 #include "../performance/MoveConstructorInitCheck.h"
-#include "../readability/EnumInitialValueCheck.h"
 #include "../readability/UppercaseLiteralSuffixCheck.h"
 #include "CommandProcessorCheck.h"
 #include "DefaultOperatorNewAlignmentCheck.h"
@@ -300,9 +299,6 @@ public:
         "cert-flp37-c");
     // FIO
     CheckFactories.registerCheck<misc::NonCopyableObjectsCheck>("cert-fio38-c");
-    // INT
-    CheckFactories.registerCheck<readability::EnumInitialValueCheck>(
-        "cert-int09-c");
     // MSC
     CheckFactories.registerCheck<bugprone::UnsafeFunctionsCheck>(
         "cert-msc24-c");

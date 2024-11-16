@@ -38,7 +38,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/RISCVAttributes.h"
-#include "llvm/TargetParser/RISCVISAInfo.h"
+#include "llvm/Support/RISCVISAInfo.h"
 
 #include <limits>
 
@@ -83,10 +83,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
 
   SMLoc getLoc() const { return getParser().getTok().getLoc(); }
   bool isRV64() const { return getSTI().hasFeature(RISCV::Feature64Bit); }
-  bool isRVE() const { return getSTI().hasFeature(RISCV::FeatureStdExtE); }
-  bool enableExperimentalExtension() const {
-    return getSTI().hasFeature(RISCV::Experimental);
-  }
+  bool isRVE() const { return getSTI().hasFeature(RISCV::FeatureRVE); }
 
   RISCVTargetStreamer &getTargetStreamer() {
     assert(getParser().getStreamer().getTargetStreamer() &&
@@ -120,7 +117,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
 
   ParseStatus parseDirective(AsmToken DirectiveID) override;
 
-  bool parseVTypeToken(const AsmToken &Tok, VTypeState &State, unsigned &Sew,
+  bool parseVTypeToken(StringRef Identifier, VTypeState &State, unsigned &Sew,
                        unsigned &Lmul, bool &Fractional, bool &TailAgnostic,
                        bool &MaskAgnostic);
   bool generateVTypeError(SMLoc ErrorLoc);
@@ -216,11 +213,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
   ParseStatus parseReglist(OperandVector &Operands);
   ParseStatus parseRegReg(OperandVector &Operands);
   ParseStatus parseRetval(OperandVector &Operands);
-  ParseStatus parseZcmpStackAdj(OperandVector &Operands,
-                                bool ExpectNegative = false);
-  ParseStatus parseZcmpNegStackAdj(OperandVector &Operands) {
-    return parseZcmpStackAdj(Operands, /*ExpectNegative*/ true);
-  }
+  ParseStatus parseZcmpSpimm(OperandVector &Operands);
 
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
 
@@ -984,9 +977,9 @@ public:
     return Imm.IsRV64;
   }
 
-  MCRegister getReg() const override {
+  unsigned getReg() const override {
     assert(Kind == KindTy::Register && "Invalid type access!");
-    return Reg.RegNum;
+    return Reg.RegNum.id();
   }
 
   StringRef getSysReg() const {
@@ -1069,7 +1062,7 @@ public:
       break;
     case KindTy::Spimm:
       OS << "<Spimm: ";
-      OS << Spimm.Val;
+      RISCVZC::printSpimm(Spimm.Val, OS);
       OS << '>';
       break;
     case KindTy::RegReg:
@@ -1615,7 +1608,7 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
         ErrorLoc,
         "operand must be {ra [, s0[-sN]]} or {x1 [, x8[-x9][, x18[-xN]]]}");
   }
-  case Match_InvalidStackAdj: {
+  case Match_InvalidSpimm: {
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(
         ErrorLoc,
@@ -2128,15 +2121,10 @@ ParseStatus RISCVAsmParser::parseJALOffset(OperandVector &Operands) {
   return parseImmediate(Operands);
 }
 
-bool RISCVAsmParser::parseVTypeToken(const AsmToken &Tok, VTypeState &State,
+bool RISCVAsmParser::parseVTypeToken(StringRef Identifier, VTypeState &State,
                                      unsigned &Sew, unsigned &Lmul,
                                      bool &Fractional, bool &TailAgnostic,
                                      bool &MaskAgnostic) {
-  if (Tok.isNot(AsmToken::Identifier))
-    return true;
-
-  StringRef Identifier = Tok.getIdentifier();
-
   switch (State) {
   case VTypeState_SEW:
     if (!Identifier.consume_front("e"))
@@ -2195,14 +2183,24 @@ ParseStatus RISCVAsmParser::parseVTypeI(OperandVector &Operands) {
 
   VTypeState State = VTypeState_SEW;
 
-  if (parseVTypeToken(getTok(), State, Sew, Lmul, Fractional, TailAgnostic,
+  if (getLexer().isNot(AsmToken::Identifier))
+    return ParseStatus::NoMatch;
+
+  StringRef Identifier = getTok().getIdentifier();
+
+  if (parseVTypeToken(Identifier, State, Sew, Lmul, Fractional, TailAgnostic,
                       MaskAgnostic))
     return ParseStatus::NoMatch;
 
   getLexer().Lex();
 
   while (parseOptionalToken(AsmToken::Comma)) {
-    if (parseVTypeToken(getTok(), State, Sew, Lmul, Fractional, TailAgnostic,
+    if (getLexer().isNot(AsmToken::Identifier))
+      break;
+
+    Identifier = getTok().getIdentifier();
+
+    if (parseVTypeToken(Identifier, State, Sew, Lmul, Fractional, TailAgnostic,
                         MaskAgnostic))
       break;
 
@@ -2585,17 +2583,16 @@ ParseStatus RISCVAsmParser::parseReglist(OperandVector &Operands) {
   return ParseStatus::Success;
 }
 
-ParseStatus RISCVAsmParser::parseZcmpStackAdj(OperandVector &Operands,
-                                              bool ExpectNegative) {
-  bool Negative = parseOptionalToken(AsmToken::Minus);
+ParseStatus RISCVAsmParser::parseZcmpSpimm(OperandVector &Operands) {
+  (void)parseOptionalToken(AsmToken::Minus);
 
   SMLoc S = getLoc();
   int64_t StackAdjustment = getLexer().getTok().getIntVal();
   unsigned Spimm = 0;
   unsigned RlistVal = static_cast<RISCVOperand *>(Operands[1].get())->Rlist.Val;
 
-  if (Negative != ExpectNegative ||
-      !RISCVZC::getSpimm(RlistVal, Spimm, StackAdjustment, isRV64()))
+  bool IsEABI = isRVE();
+  if (!RISCVZC::getSpimm(RlistVal, Spimm, StackAdjustment, isRV64(), IsEABI))
     return ParseStatus::NoMatch;
   Operands.push_back(RISCVOperand::createSpimm(Spimm << 4, S));
   getLexer().Lex();
@@ -2827,19 +2824,17 @@ bool RISCVAsmParser::parseDirectiveOption() {
         break;
       }
 
-      if (isDigit(Arch.back()))
-        return Error(
-            Loc, "Extension version number parsing not currently implemented");
-
-      std::string Feature = RISCVISAInfo::getTargetFeatureForExtension(Arch);
-      if (!enableExperimentalExtension() &&
-          StringRef(Feature).starts_with("experimental-"))
-        return Error(Loc, "Unexpected experimental extensions.");
-      auto Ext = llvm::lower_bound(RISCVFeatureKV, Feature);
-      if (Ext == std::end(RISCVFeatureKV) || StringRef(Ext->Key) != Feature)
+      auto Ext = llvm::lower_bound(RISCVFeatureKV, Arch);
+      if (Ext == std::end(RISCVFeatureKV) || StringRef(Ext->Key) != Arch ||
+          !RISCVISAInfo::isSupportedExtension(Arch)) {
+        if (isDigit(Arch.back()))
+          return Error(
+              Loc,
+              "Extension version number parsing not currently implemented");
         return Error(Loc, "unknown extension feature");
+      }
 
-      Args.emplace_back(Type, Arch.str());
+      Args.emplace_back(Type, Ext->Key);
 
       if (Type == RISCVOptionArchArgType::Plus) {
         FeatureBitset OldFeatureBits = STI->getFeatureBits();
@@ -3086,11 +3081,34 @@ void RISCVAsmParser::emitToStreamer(MCStreamer &S, const MCInst &Inst) {
 
 void RISCVAsmParser::emitLoadImm(MCRegister DestReg, int64_t Value,
                                  MCStreamer &Out) {
-  SmallVector<MCInst, 8> Seq;
-  RISCVMatInt::generateMCInstSeq(Value, getSTI(), DestReg, Seq);
+  RISCVMatInt::InstSeq Seq = RISCVMatInt::generateInstSeq(Value, getSTI());
 
-  for (MCInst &Inst : Seq) {
-    emitToStreamer(Out, Inst);
+  MCRegister SrcReg = RISCV::X0;
+  for (const RISCVMatInt::Inst &Inst : Seq) {
+    switch (Inst.getOpndKind()) {
+    case RISCVMatInt::Imm:
+      emitToStreamer(Out,
+                     MCInstBuilder(Inst.getOpcode()).addReg(DestReg).addImm(Inst.getImm()));
+      break;
+    case RISCVMatInt::RegX0:
+      emitToStreamer(
+          Out, MCInstBuilder(Inst.getOpcode()).addReg(DestReg).addReg(SrcReg).addReg(
+                   RISCV::X0));
+      break;
+    case RISCVMatInt::RegReg:
+      emitToStreamer(
+          Out, MCInstBuilder(Inst.getOpcode()).addReg(DestReg).addReg(SrcReg).addReg(
+                   SrcReg));
+      break;
+    case RISCVMatInt::RegImm:
+      emitToStreamer(
+          Out, MCInstBuilder(Inst.getOpcode()).addReg(DestReg).addReg(SrcReg).addImm(
+                   Inst.getImm()));
+      break;
+    }
+
+    // Only the first instruction has X0 as its source.
+    SrcReg = DestReg;
   }
 }
 

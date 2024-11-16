@@ -795,17 +795,10 @@ def G_FMAXNUM : GenericInstruction {
   let isCommutable = true;
 }
 
-// FMINNUM_IEEE/FMAXNUM_IEEE - Perform floating-point minimumNumber or
-// maximumNumber on two values, following IEEE-754 definitions. This
-// differs from FMINNUM/FMAXNUM in the handling of signaling NaNs, and
-// signed zero.
-//
-// If one input is a signaling NaN, returns a quiet NaN. This matches
-// IEEE-754 2008's minnum/maxnum behavior for signaling NaNs (which
-// differs from 2019).
-//
-// These treat -0 as ordered less than +0, matching the behavior of
-// IEEE-754 2019's minimumNumber/maximumNumber.
+// FMINNUM_IEEE/FMAXNUM_IEEE - Perform floating-point minimum or maximum on
+// two values, following the IEEE-754 2008 definition. This differs from
+// FMINNUM/FMAXNUM in the handling of signaling NaNs. If one input is a
+// signaling NaN, returns a quiet NaN.
 def G_FMINNUM_IEEE : GenericInstruction {
   let OutOperandList = (outs type0:$dst);
   let InOperandList = (ins type0:$src1, type0:$src2);
@@ -988,13 +981,6 @@ def G_FSIN : GenericInstruction {
   let hasSideEffects = false;
 }
 
-// Floating point tangent of a value.
-def G_FTAN : GenericInstruction {
-  let OutOperandList = (outs type0:$dst);
-  let InOperandList = (ins type0:$src1);
-  let hasSideEffects = false;
-}
-
 // Floating point square root of a value.
 // This returns NaN for negative nonzero values.
 // NOTE: Unlike libm sqrt(), this never sets errno. In all other respects it's
@@ -1098,12 +1084,6 @@ def G_INTRINSIC_ROUND : GenericInstruction {
 }
 
 def G_INTRINSIC_LRINT : GenericInstruction {
-  let OutOperandList = (outs type0:$dst);
-  let InOperandList = (ins type1:$src);
-  let hasSideEffects = false;
-}
-
-def G_INTRINSIC_LLRINT : GenericInstruction {
   let OutOperandList = (outs type0:$dst);
   let InOperandList = (ins type1:$src);
   let hasSideEffects = false;
@@ -1593,28 +1573,6 @@ def G_BZERO : GenericInstruction {
   let InOperandList = (ins ptype0:$dst_addr, type1:$size, untyped_imm_0:$tailcall);
   let hasSideEffects = false;
   let mayStore = true;
-}
-
-//------------------------------------------------------------------------------
-// Trap intrinsics
-//------------------------------------------------------------------------------
-def G_TRAP : GenericInstruction {
-  let OutOperandList = (outs);
-  let InOperandList = (ins);
-  let hasSideEffects = true;
-  let mayStore = true;
-}
-
-def G_DEBUGTRAP : GenericInstruction {
-  let OutOperandList = (outs);
-  let InOperandList = (ins);
-  let hasSideEffects = true;
-}
-
-def G_UBSANTRAP : GenericInstruction {
-  let OutOperandList = (outs);
-  let InOperandList = (ins i8imm:$kind);
-  let hasSideEffects = true;
 }
 
 //------------------------------------------------------------------------------

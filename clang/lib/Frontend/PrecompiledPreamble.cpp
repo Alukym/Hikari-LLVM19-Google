@@ -290,7 +290,8 @@ private:
 
 class PrecompilePreambleConsumer : public PCHGenerator {
 public:
-  PrecompilePreambleConsumer(PrecompilePreambleAction &Action, Preprocessor &PP,
+  PrecompilePreambleConsumer(PrecompilePreambleAction &Action,
+                             const Preprocessor &PP,
                              InMemoryModuleCache &ModuleCache,
                              StringRef isysroot,
                              std::shared_ptr<PCHBuffer> Buffer)

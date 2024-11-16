@@ -47,7 +47,6 @@ on how to get in touch with us and to learn more about the current status.
    Character
    ComplexOperations
    ControlFlowGraph
-   DebugGeneration
    Directives
    DoConcurrent
    Extensions
@@ -86,7 +85,6 @@ on how to get in touch with us and to learn more about the current status.
    Semantics
    f2018-grammar.md
    fstack-arrays
-   Real16MathSupport
 ```
 
 # Indices and tables

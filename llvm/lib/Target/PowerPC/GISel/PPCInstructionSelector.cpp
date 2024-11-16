@@ -739,7 +739,7 @@ bool PPCInstructionSelector::select(MachineInstr &I) {
     auto SelectLoadStoreAddressingMode = [&]() -> MachineInstr * {
       const unsigned NewOpc = selectLoadStoreOp(
           I.getOpcode(), RBI.getRegBank(LdSt.getReg(0), MRI, TRI)->getID(),
-          LdSt.getMemSizeInBits().getValue());
+          LdSt.getMemSizeInBits());
 
       if (NewOpc == I.getOpcode())
         return nullptr;

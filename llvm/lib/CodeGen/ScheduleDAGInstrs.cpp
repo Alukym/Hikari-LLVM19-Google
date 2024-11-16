@@ -282,7 +282,7 @@ void ScheduleDAGInstrs::addPhysRegDataDeps(SUnit *SU, unsigned OperIdx) {
       } else {
         Dep.setLatency(0);
       }
-      ST.adjustSchedDependency(SU, OperIdx, UseSU, UseOpIdx, Dep, &SchedModel);
+      ST.adjustSchedDependency(SU, OperIdx, UseSU, UseOpIdx, Dep);
       UseSU->addPred(Dep);
     }
   }
@@ -323,8 +323,7 @@ void ScheduleDAGInstrs::addPhysRegDeps(SUnit *SU, unsigned OperIdx) {
           Dep.setLatency(
               SchedModel.computeOutputLatency(MI, OperIdx, DefInstr));
         }
-        ST.adjustSchedDependency(SU, OperIdx, DefSU, I->OpIdx, Dep,
-                                 &SchedModel);
+        ST.adjustSchedDependency(SU, OperIdx, DefSU, I->OpIdx, Dep);
         DefSU->addPred(Dep);
       }
     }
@@ -454,8 +453,7 @@ void ScheduleDAGInstrs::addVRegDefDeps(SUnit *SU, unsigned OperIdx) {
         SDep Dep(SU, SDep::Data, Reg);
         Dep.setLatency(SchedModel.computeOperandLatency(MI, OperIdx, Use,
                                                         I->OperandIndex));
-        ST.adjustSchedDependency(SU, OperIdx, UseSU, I->OperandIndex, Dep,
-                                 &SchedModel);
+        ST.adjustSchedDependency(SU, OperIdx, UseSU, I->OperandIndex, Dep);
         UseSU->addPred(Dep);
       }
 

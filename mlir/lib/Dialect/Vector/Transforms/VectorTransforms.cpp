@@ -1643,12 +1643,10 @@ struct DropUnitDimFromElementwiseOps final
     if (!resultVectorType)
       return failure();
 
-    // Check the operand pre-conditions. For `Elementwise` ops all operands are
-    // guaranteed to have identical shapes (with some exceptions such as
-    // `arith.select`) and it suffices to only check one of them.
-    auto sourceVectorType = dyn_cast<VectorType>(op->getOperand(0).getType());
-    if (!sourceVectorType)
-      return failure();
+    // Check the pre-conditions. For `Elementwise` Ops all operands are
+    // guaranteed to have identical shapes and it suffices to only check the
+    // first one.
+    auto sourceVectorType = cast<VectorType>(op->getOperands()[0].getType());
     if (sourceVectorType.getRank() < 2)
       return failure();
 

@@ -26,7 +26,6 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/MD5.h"
-#include "llvm/Support/StringSaver.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -70,10 +69,6 @@ class SMDiagnostic;
 class SMLoc;
 class SourceMgr;
 enum class EmitDwarfUnwindType;
-
-namespace wasm {
-struct WasmSignature;
-}
 
 /// Context object for machine code objects.  This class owns all of the
 /// sections that it creates.
@@ -143,8 +138,6 @@ private:
   SpecificBumpPtrAllocator<MCSectionWasm> WasmAllocator;
   SpecificBumpPtrAllocator<MCSectionXCOFF> XCOFFAllocator;
   SpecificBumpPtrAllocator<MCInst> MCInstAllocator;
-
-  SpecificBumpPtrAllocator<wasm::WasmSignature> WasmSignatureAllocator;
 
   /// Bindings of names to symbols.
   SymbolTable Symbols;
@@ -545,10 +538,6 @@ public:
   /// inline assembly.
   void registerInlineAsmLabel(MCSymbol *Sym);
 
-  /// Allocates and returns a new `WasmSignature` instance (with empty parameter
-  /// and return type lists).
-  wasm::WasmSignature *createWasmSignature();
-
   /// @}
 
   /// \name Section Management
@@ -860,12 +849,6 @@ public:
   }
 
   void deallocate(void *Ptr) {}
-
-  /// Allocates a copy of the given string on the allocator managed by this
-  /// context and returns the result.
-  StringRef allocateString(StringRef s) {
-    return StringSaver(Allocator).save(s);
-  }
 
   bool hadError() { return HadError; }
   void diagnose(const SMDiagnostic &SMD);

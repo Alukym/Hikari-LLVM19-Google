@@ -43,7 +43,6 @@
 #include "lldb/Target/ThreadList.h"
 #include "lldb/Target/ThreadPlanStack.h"
 #include "lldb/Target/Trace.h"
-#include "lldb/Utility/AddressableBits.h"
 #include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/Broadcaster.h"
 #include "lldb/Utility/Event.h"
@@ -381,7 +380,7 @@ public:
 
   // These two functions fill out the Broadcaster interface:
 
-  static llvm::StringRef GetStaticBroadcasterClass();
+  static ConstString &GetStaticBroadcasterClass();
 
   static constexpr llvm::StringRef AttachSynchronousHijackListenerName =
       "lldb.internal.Process.AttachSynchronous.hijack";
@@ -390,7 +389,7 @@ public:
   static constexpr llvm::StringRef ResumeSynchronousHijackListenerName =
       "lldb.internal.Process.ResumeSynchronous.hijack";
 
-  llvm::StringRef GetBroadcasterClass() const override {
+  ConstString &GetBroadcasterClass() const override {
     return GetStaticBroadcasterClass();
   }
 
@@ -3219,8 +3218,6 @@ protected:
   virtual Status UpdateAutomaticSignalFiltering();
 
   void LoadOperatingSystemPlugin(bool flush);
-
-  void SetAddressableBitMasks(AddressableBits bit_masks);
 
 private:
   Status DestroyImpl(bool force_kill);

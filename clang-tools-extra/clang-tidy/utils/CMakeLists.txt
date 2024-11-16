@@ -6,7 +6,6 @@ set(LLVM_LINK_COMPONENTS
 add_clang_library(clangTidyUtils
   Aliasing.cpp
   ASTUtils.cpp
-  BracesAroundStatement.cpp
   DeclRefExprUtils.cpp
   DesignatedInitializers.cpp
   ExceptionAnalyzer.cpp

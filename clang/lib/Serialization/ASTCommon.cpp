@@ -186,9 +186,6 @@ serialization::TypeIdxFromBuiltin(const BuiltinType *BT) {
   case BuiltinType::Overload:
     ID = PREDEF_TYPE_OVERLOAD_ID;
     break;
-  case BuiltinType::UnresolvedTemplate:
-    ID = PREDEF_TYPE_UNRESOLVED_TEMPLATE;
-    break;
   case BuiltinType::BoundMember:
     ID = PREDEF_TYPE_BOUND_MEMBER;
     break;
@@ -264,8 +261,8 @@ serialization::TypeIdxFromBuiltin(const BuiltinType *BT) {
   case BuiltinType::IncompleteMatrixIdx:
     ID = PREDEF_TYPE_INCOMPLETE_MATRIX_IDX;
     break;
-  case BuiltinType::ArraySection:
-    ID = PREDEF_TYPE_ARRAY_SECTION;
+  case BuiltinType::OMPArraySection:
+    ID = PREDEF_TYPE_OMP_ARRAY_SECTION;
     break;
   case BuiltinType::OMPArrayShaping:
     ID = PREDEF_TYPE_OMP_ARRAY_SHAPING;
@@ -287,7 +284,7 @@ unsigned serialization::ComputeHash(Selector Sel) {
     ++N;
   unsigned R = 5381;
   for (unsigned I = 0; I != N; ++I)
-    if (const IdentifierInfo *II = Sel.getIdentifierInfoForSlot(I))
+    if (IdentifierInfo *II = Sel.getIdentifierInfoForSlot(I))
       R = llvm::djbHash(II->getName(), R);
   return R;
 }

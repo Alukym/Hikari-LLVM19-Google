@@ -243,11 +243,6 @@ void IntrinsicLowering::LowerIntrinsicCall(CallInst *CI) {
     break;
   }
 
-  case Intrinsic::allow_runtime_check:
-  case Intrinsic::allow_ubsan_check:
-    CI->replaceAllUsesWith(ConstantInt::getTrue(CI->getType()));
-    return;
-
   case Intrinsic::ctpop:
     CI->replaceAllUsesWith(LowerCTPOP(Context, CI->getArgOperand(0), CI));
     break;
@@ -477,7 +472,7 @@ bool IntrinsicLowering::LowerToByteSwap(CallInst *CI) {
   Function *Int = Intrinsic::getDeclaration(M, Intrinsic::bswap, Ty);
 
   Value *Op = CI->getArgOperand(0);
-  Op = CallInst::Create(Int, Op, CI->getName(), CI->getIterator());
+  Op = CallInst::Create(Int, Op, CI->getName(), CI);
 
   CI->replaceAllUsesWith(Op);
   CI->eraseFromParent();

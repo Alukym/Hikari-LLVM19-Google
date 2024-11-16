@@ -512,8 +512,7 @@ SBBroadcaster SBCommandInterpreter::GetBroadcaster() {
 const char *SBCommandInterpreter::GetBroadcasterClass() {
   LLDB_INSTRUMENT();
 
-  return ConstString(CommandInterpreter::GetStaticBroadcasterClass())
-      .AsCString();
+  return CommandInterpreter::GetStaticBroadcasterClass().AsCString();
 }
 
 const char *SBCommandInterpreter::GetArgumentTypeAsCString(

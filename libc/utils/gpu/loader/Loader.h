@@ -108,11 +108,11 @@ inline void handle_error(rpc_status_t) {
 }
 
 template <uint32_t lane_size>
-inline void register_rpc_callbacks(rpc_device_t device) {
+inline void register_rpc_callbacks(uint32_t device_id) {
   static_assert(lane_size == 32 || lane_size == 64, "Invalid Lane size");
   // Register the ping test for the `libc` tests.
   rpc_register_callback(
-      device, static_cast<rpc_opcode_t>(RPC_TEST_INCREMENT),
+      device_id, static_cast<rpc_opcode_t>(RPC_TEST_INCREMENT),
       [](rpc_port_t port, void *data) {
         rpc_recv_and_send(
             port,
@@ -125,7 +125,7 @@ inline void register_rpc_callbacks(rpc_device_t device) {
 
   // Register the interface test callbacks.
   rpc_register_callback(
-      device, static_cast<rpc_opcode_t>(RPC_TEST_INTERFACE),
+      device_id, static_cast<rpc_opcode_t>(RPC_TEST_INTERFACE),
       [](rpc_port_t port, void *data) {
         uint64_t cnt = 0;
         bool end_with_recv;
@@ -207,7 +207,7 @@ inline void register_rpc_callbacks(rpc_device_t device) {
 
   // Register the stream test handler.
   rpc_register_callback(
-      device, static_cast<rpc_opcode_t>(RPC_TEST_STREAM),
+      device_id, static_cast<rpc_opcode_t>(RPC_TEST_STREAM),
       [](rpc_port_t port, void *data) {
         uint64_t sizes[lane_size] = {0};
         void *dst[lane_size] = {nullptr};

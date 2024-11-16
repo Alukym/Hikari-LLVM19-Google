@@ -11,7 +11,6 @@
 #include "mlir/Dialect/Shape/IR/Shape.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "mlir/Dialect/CommonFolders.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Traits.h"
@@ -65,8 +64,9 @@ LogicalResult shape::getShapeVec(Value input,
 }
 
 static bool isErrorPropagationPossible(TypeRange operandTypes) {
-  return llvm::any_of(operandTypes,
-                      llvm::IsaPred<SizeType, ShapeType, ValueShapeType>);
+  return llvm::any_of(operandTypes, [](Type ty) {
+    return llvm::isa<SizeType, ShapeType, ValueShapeType>(ty);
+  });
 }
 
 static LogicalResult verifySizeOrIndexOp(Operation *op) {
@@ -143,8 +143,6 @@ void ShapeDialect::initialize() {
   // still evolving it makes it simple to start with an unregistered ops and
   // try different variants before actually defining the op.
   allowUnknownOperations();
-  declarePromisedInterfaces<bufferization::BufferizableOpInterface, AssumingOp,
-                            AssumingYieldOp>();
 }
 
 Operation *ShapeDialect::materializeConstant(OpBuilder &builder,

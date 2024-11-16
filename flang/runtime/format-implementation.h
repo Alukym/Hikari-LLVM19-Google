@@ -25,7 +25,7 @@
 namespace Fortran::runtime::io {
 
 template <typename CONTEXT>
-RT_API_ATTRS FormatControl<CONTEXT>::FormatControl(const Terminator &terminator,
+FormatControl<CONTEXT>::FormatControl(const Terminator &terminator,
     const CharType *format, std::size_t formatLength,
     const Descriptor *formatDescriptor, int maxHeight)
     : maxHeight_{static_cast<std::uint8_t>(maxHeight)}, format_{format},
@@ -63,7 +63,7 @@ RT_API_ATTRS FormatControl<CONTEXT>::FormatControl(const Terminator &terminator,
 }
 
 template <typename CONTEXT>
-RT_API_ATTRS int FormatControl<CONTEXT>::GetIntField(
+int FormatControl<CONTEXT>::GetIntField(
     IoErrorHandler &handler, CharType firstCh, bool *hadError) {
   CharType ch{firstCh ? firstCh : PeekNext()};
   bool negate{ch == '-'};
@@ -114,8 +114,7 @@ RT_API_ATTRS int FormatControl<CONTEXT>::GetIntField(
 }
 
 template <typename CONTEXT>
-static RT_API_ATTRS void HandleControl(
-    CONTEXT &context, char ch, char next, int n) {
+static void HandleControl(CONTEXT &context, char ch, char next, int n) {
   MutableModes &modes{context.mutableModes()};
   switch (ch) {
   case 'B':
@@ -222,8 +221,7 @@ static RT_API_ATTRS void HandleControl(
 // Generally assumes that the format string has survived the common
 // format validator gauntlet.
 template <typename CONTEXT>
-RT_API_ATTRS int FormatControl<CONTEXT>::CueUpNextDataEdit(
-    Context &context, bool stop) {
+int FormatControl<CONTEXT>::CueUpNextDataEdit(Context &context, bool stop) {
   bool hitUnlimitedLoopEnd{false};
   // Do repetitions remain on an unparenthesized data edit?
   while (height_ > 1 && format_[stack_[height_ - 1].start] != '(') {
@@ -235,7 +233,7 @@ RT_API_ATTRS int FormatControl<CONTEXT>::CueUpNextDataEdit(
     }
   }
   while (true) {
-    Fortran::common::optional<int> repeat;
+    std::optional<int> repeat;
     bool unlimited{false};
     auto maybeReversionPoint{offset_};
     CharType ch{GetNextChar(context)};
@@ -421,8 +419,8 @@ RT_API_ATTRS int FormatControl<CONTEXT>::CueUpNextDataEdit(
 
 // Returns the next data edit descriptor
 template <typename CONTEXT>
-RT_API_ATTRS Fortran::common::optional<DataEdit>
-FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
+std::optional<DataEdit> FormatControl<CONTEXT>::GetNextDataEdit(
+    Context &context, int maxRepeat) {
   int repeat{CueUpNextDataEdit(context)};
   auto start{offset_};
   DataEdit edit;
@@ -453,7 +451,7 @@ FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
         }
         if (edit.ioTypeChars >= edit.maxIoTypeChars) {
           ReportBadFormat(context, "Excessive DT'iotype' in FORMAT", start);
-          return Fortran::common::nullopt;
+          return std::nullopt;
         }
         edit.ioType[edit.ioTypeChars++] = ch;
         if (ch == quote) {
@@ -462,7 +460,7 @@ FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
       }
       if (!ok) {
         ReportBadFormat(context, "Unclosed DT'iotype' in FORMAT", start);
-        return Fortran::common::nullopt;
+        return std::nullopt;
       }
     }
     if (PeekNext() == '(') {
@@ -477,7 +475,7 @@ FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
         }
         if (edit.vListEntries >= edit.maxVListEntries) {
           ReportBadFormat(context, "Excessive DT(v_list) in FORMAT", start);
-          return Fortran::common::nullopt;
+          return std::nullopt;
         }
         edit.vList[edit.vListEntries++] = n;
         auto ch{static_cast<char>(GetNextChar(context))};
@@ -488,7 +486,7 @@ FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
       }
       if (!ok) {
         ReportBadFormat(context, "Unclosed DT(v_list) in FORMAT", start);
-        return Fortran::common::nullopt;
+        return std::nullopt;
       }
     }
   } else { // not DT'iotype'
@@ -526,7 +524,7 @@ FormatControl<CONTEXT>::GetNextDataEdit(Context &context, int maxRepeat) {
 }
 
 template <typename CONTEXT>
-RT_API_ATTRS void FormatControl<CONTEXT>::Finish(Context &context) {
+void FormatControl<CONTEXT>::Finish(Context &context) {
   CueUpNextDataEdit(context, true /* stop at colon or end of FORMAT */);
   if (freeFormat_) {
     FreeMemory(const_cast<CharType *>(format_));

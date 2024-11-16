@@ -188,8 +188,6 @@ add_llvm_component_library(LLVMSupport
   GlobPattern.cpp
   GraphWriter.cpp
   Hashing.cpp
-  HexagonAttributeParser.cpp
-  HexagonAttributes.cpp
   InitLLVM.cpp
   InstructionCost.cpp
   IntEqClasses.cpp
@@ -219,7 +217,7 @@ add_llvm_component_library(LLVMSupport
   Regex.cpp
   RISCVAttributes.cpp
   RISCVAttributeParser.cpp
-  RISCVISAUtils.cpp
+  RISCVISAInfo.cpp
   ScaledNumber.cpp
   ScopedPrinter.cpp
   SHA1.cpp
@@ -287,6 +285,9 @@ add_llvm_component_library(LLVMSupport
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/ADT
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Support
   ${Backtrace_INCLUDE_DIRS}
+
+  DEPENDS
+  llvm_vcsrevision_h
 
   LINK_LIBS
   ${system_libs} ${imported_libs} ${delayload_flags}

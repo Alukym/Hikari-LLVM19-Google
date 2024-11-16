@@ -8,7 +8,6 @@
 
 #include "ABIInfoImpl.h"
 #include "TargetInfo.h"
-#include "clang/AST/Decl.h"
 #include "clang/Basic/DiagnosticFrontend.h"
 #include "llvm/TargetParser/AArch64TargetParser.h"
 
@@ -27,8 +26,6 @@ class AArch64ABIInfo : public ABIInfo {
 public:
   AArch64ABIInfo(CodeGenTypes &CGT, AArch64ABIKind Kind)
       : ABIInfo(CGT), Kind(Kind) {}
-
-  bool isSoftFloat() const { return Kind == AArch64ABIKind::AAPCSSoft; }
 
 private:
   AArch64ABIKind getABIKind() const { return Kind; }
@@ -58,8 +55,8 @@ private:
   Address EmitDarwinVAArg(Address VAListAddr, QualType Ty,
                           CodeGenFunction &CGF) const;
 
-  Address EmitAAPCSVAArg(Address VAListAddr, QualType Ty, CodeGenFunction &CGF,
-                         AArch64ABIKind Kind) const;
+  Address EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
+                         CodeGenFunction &CGF) const;
 
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override {
@@ -70,7 +67,7 @@ private:
 
     return Kind == AArch64ABIKind::Win64 ? EmitMSVAArg(CGF, VAListAddr, Ty)
            : isDarwinPCS()               ? EmitDarwinVAArg(VAListAddr, Ty, CGF)
-                           : EmitAAPCSVAArg(VAListAddr, Ty, CGF, Kind);
+                                         : EmitAAPCSVAArg(VAListAddr, Ty, CGF);
   }
 
   Address EmitMSVAArg(CodeGenFunction &CGF, Address VAListAddr,
@@ -166,27 +163,10 @@ public:
     return TargetCodeGenInfo::isScalarizableAsmOperand(CGF, Ty);
   }
 
-  void checkFunctionABI(CodeGenModule &CGM,
-                        const FunctionDecl *Decl) const override;
-
   void checkFunctionCallABI(CodeGenModule &CGM, SourceLocation CallLoc,
                             const FunctionDecl *Caller,
-                            const FunctionDecl *Callee, const CallArgList &Args,
-                            QualType ReturnType) const override;
-
-private:
-  // Diagnose calls between functions with incompatible Streaming SVE
-  // attributes.
-  void checkFunctionCallABIStreaming(CodeGenModule &CGM, SourceLocation CallLoc,
-                                     const FunctionDecl *Caller,
-                                     const FunctionDecl *Callee) const;
-  // Diagnose calls which must pass arguments in floating-point registers when
-  // the selected target does not have floating-point registers.
-  void checkFunctionCallABISoftFloat(CodeGenModule &CGM, SourceLocation CallLoc,
-                                     const FunctionDecl *Caller,
-                                     const FunctionDecl *Callee,
-                                     const CallArgList &Args,
-                                     QualType ReturnType) const;
+                            const FunctionDecl *Callee,
+                            const CallArgList &Args) const override;
 };
 
 class WindowsAArch64TargetCodeGenInfo : public AArch64TargetCodeGenInfo {
@@ -514,11 +494,6 @@ bool AArch64SwiftABIInfo::isLegalVectorType(CharUnits VectorSize,
 }
 
 bool AArch64ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
-  // For the soft-float ABI variant, no types are considered to be homogeneous
-  // aggregates.
-  if (Kind == AArch64ABIKind::AAPCSSoft)
-    return false;
-
   // Homogeneous aggregates for AAPCS64 must have base types of a floating
   // point type or a short-vector type. This is the same as the 32-bit ABI,
   // but with the difference that any floating-point type is allowed,
@@ -550,8 +525,7 @@ bool AArch64ABIInfo::isZeroLengthBitfieldPermittedInHomogeneousAggregate()
 }
 
 Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
-                                       CodeGenFunction &CGF,
-                                       AArch64ABIKind Kind) const {
+                                       CodeGenFunction &CGF) const {
   ABIArgInfo AI = classifyArgumentType(Ty, /*IsVariadic=*/true,
                                        CGF.CurFnInfo->getCallingConvention());
   // Empty records are ignored for parameter passing purposes.
@@ -576,8 +550,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
     BaseTy = ArrTy->getElementType();
     NumRegs = ArrTy->getNumElements();
   }
-  bool IsFPR = Kind != AArch64ABIKind::AAPCSSoft &&
-               (BaseTy->isFloatingPointTy() || BaseTy->isVectorTy());
+  bool IsFPR = BaseTy->isFloatingPointTy() || BaseTy->isVectorTy();
 
   // The AArch64 va_list type and handling is specified in the Procedure Call
   // Standard, section B.4:
@@ -853,6 +826,14 @@ Address AArch64ABIInfo::EmitMSVAArg(CodeGenFunction &CGF, Address VAListAddr,
                           /*allowHigherAlign*/ false);
 }
 
+static bool isStreaming(const FunctionDecl *F) {
+  if (F->hasAttr<ArmLocallyStreamingAttr>())
+    return true;
+  if (const auto *T = F->getType()->getAs<FunctionProtoType>())
+    return T->getAArch64SMEAttributes() & FunctionType::SME_PStateSMEnabledMask;
+  return false;
+}
+
 static bool isStreamingCompatible(const FunctionDecl *F) {
   if (const auto *T = F->getType()->getAs<FunctionProtoType>())
     return T->getAArch64SMEAttributes() &
@@ -860,49 +841,14 @@ static bool isStreamingCompatible(const FunctionDecl *F) {
   return false;
 }
 
-// Report an error if an argument or return value of type Ty would need to be
-// passed in a floating-point register.
-static void diagnoseIfNeedsFPReg(DiagnosticsEngine &Diags,
-                                 const StringRef ABIName,
-                                 const AArch64ABIInfo &ABIInfo,
-                                 const QualType &Ty, const NamedDecl *D) {
-  const Type *HABase = nullptr;
-  uint64_t HAMembers = 0;
-  if (Ty->isFloatingType() || Ty->isVectorType() ||
-      ABIInfo.isHomogeneousAggregate(Ty, HABase, HAMembers)) {
-    Diags.Report(D->getLocation(), diag::err_target_unsupported_type_for_abi)
-        << D->getDeclName() << Ty << ABIName;
-  }
-}
-
-// If we are using a hard-float ABI, but do not have floating point registers,
-// then report an error for any function arguments or returns which would be
-// passed in floating-pint registers.
-void AArch64TargetCodeGenInfo::checkFunctionABI(
-    CodeGenModule &CGM, const FunctionDecl *FuncDecl) const {
-  const AArch64ABIInfo &ABIInfo = getABIInfo<AArch64ABIInfo>();
-  const TargetInfo &TI = ABIInfo.getContext().getTargetInfo();
-
-  if (!TI.hasFeature("fp") && !ABIInfo.isSoftFloat()) {
-    diagnoseIfNeedsFPReg(CGM.getDiags(), TI.getABI(), ABIInfo,
-                         FuncDecl->getReturnType(), FuncDecl);
-    for (ParmVarDecl *PVD : FuncDecl->parameters()) {
-      diagnoseIfNeedsFPReg(CGM.getDiags(), TI.getABI(), ABIInfo, PVD->getType(),
-                           PVD);
-    }
-  }
-}
-
-void AArch64TargetCodeGenInfo::checkFunctionCallABIStreaming(
+void AArch64TargetCodeGenInfo::checkFunctionCallABI(
     CodeGenModule &CGM, SourceLocation CallLoc, const FunctionDecl *Caller,
-    const FunctionDecl *Callee) const {
+    const FunctionDecl *Callee, const CallArgList &Args) const {
   if (!Caller || !Callee || !Callee->hasAttr<AlwaysInlineAttr>())
     return;
 
-  bool CallerIsStreaming =
-      IsArmStreamingFunction(Caller, /*IncludeLocallyStreaming=*/true);
-  bool CalleeIsStreaming =
-      IsArmStreamingFunction(Callee, /*IncludeLocallyStreaming=*/true);
+  bool CallerIsStreaming = isStreaming(Caller);
+  bool CalleeIsStreaming = isStreaming(Callee);
   bool CallerIsStreamingCompatible = isStreamingCompatible(Caller);
   bool CalleeIsStreamingCompatible = isStreamingCompatible(Callee);
 
@@ -915,37 +861,6 @@ void AArch64TargetCodeGenInfo::checkFunctionCallABIStreaming(
     if (NewAttr->isNewZA())
       CGM.getDiags().Report(CallLoc, diag::err_function_always_inline_new_za)
           << Callee->getDeclName();
-}
-
-// If the target does not have floating-point registers, but we are using a
-// hard-float ABI, there is no way to pass floating-point, vector or HFA values
-// to functions, so we report an error.
-void AArch64TargetCodeGenInfo::checkFunctionCallABISoftFloat(
-    CodeGenModule &CGM, SourceLocation CallLoc, const FunctionDecl *Caller,
-    const FunctionDecl *Callee, const CallArgList &Args,
-    QualType ReturnType) const {
-  const AArch64ABIInfo &ABIInfo = getABIInfo<AArch64ABIInfo>();
-  const TargetInfo &TI = ABIInfo.getContext().getTargetInfo();
-
-  if (!Caller || TI.hasFeature("fp") || ABIInfo.isSoftFloat())
-    return;
-
-  diagnoseIfNeedsFPReg(CGM.getDiags(), TI.getABI(), ABIInfo, ReturnType,
-                       Caller);
-
-  for (const CallArg &Arg : Args)
-    diagnoseIfNeedsFPReg(CGM.getDiags(), TI.getABI(), ABIInfo, Arg.getType(),
-                         Caller);
-}
-
-void AArch64TargetCodeGenInfo::checkFunctionCallABI(CodeGenModule &CGM,
-                                                    SourceLocation CallLoc,
-                                                    const FunctionDecl *Caller,
-                                                    const FunctionDecl *Callee,
-                                                    const CallArgList &Args,
-                                                    QualType ReturnType) const {
-  checkFunctionCallABIStreaming(CGM, CallLoc, Caller, Callee);
-  checkFunctionCallABISoftFloat(CGM, CallLoc, Caller, Callee, Args, ReturnType);
 }
 
 void AArch64ABIInfo::appendAttributeMangling(TargetClonesAttr *Attr,

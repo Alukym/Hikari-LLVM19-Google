@@ -693,38 +693,38 @@ let DecoderNamespace = "SparcV8", Predicates = [HasNoV9] in {
 }
 
 let rd = 0 in {
-  let mayStore = 1, Uses = [CPSR] in {
-    def STCSRrr : F3_1<3, 0b110101, (outs), (ins (MEMrr $rs1, $rs2):$addr),
+  let Defs = [CPSR] in {
+    def STCSRrr : F3_1<3, 0b110101, (outs (MEMrr $rs1, $rs2):$addr), (ins),
                        "st %csr, [$addr]", [], IIC_st>;
-    def STCSRri : F3_2<3, 0b110101, (outs), (ins (MEMri $rs1, $simm13):$addr),
+    def STCSRri : F3_2<3, 0b110101, (outs (MEMri $rs1, $simm13):$addr), (ins),
                        "st %csr, [$addr]", [], IIC_st>;
   }
-  let mayStore = 1, Uses = [CPQ] in {
-    def STDCQrr : F3_1<3, 0b110110, (outs), (ins (MEMrr $rs1, $rs2):$addr),
+  let Defs = [CPQ] in {
+    def STDCQrr : F3_1<3, 0b110110, (outs (MEMrr $rs1, $rs2):$addr), (ins),
                        "std %cq, [$addr]", [], IIC_std>;
-    def STDCQri : F3_2<3, 0b110110, (outs), (ins (MEMri $rs1, $simm13):$addr),
+    def STDCQri : F3_2<3, 0b110110, (outs (MEMri $rs1, $simm13):$addr), (ins),
                        "std %cq, [$addr]", [], IIC_std>;
   }
 }
 
 let rd = 0 in {
-  let mayStore = 1, Uses = [FSR] in {
-    def STFSRrr : F3_1<3, 0b100101, (outs), (ins (MEMrr $rs1, $rs2):$addr),
+  let Defs = [FSR] in {
+    def STFSRrr : F3_1<3, 0b100101, (outs (MEMrr $rs1, $rs2):$addr), (ins),
 		   "st %fsr, [$addr]", [], IIC_st>;
-    def STFSRri : F3_2<3, 0b100101, (outs), (ins (MEMri $rs1, $simm13):$addr),
+    def STFSRri : F3_2<3, 0b100101, (outs (MEMri $rs1, $simm13):$addr), (ins),
 		   "st %fsr, [$addr]", [], IIC_st>;
   }
-  let mayStore = 1, Defs = [FQ] in {
-    def STDFQrr : F3_1<3, 0b100110, (outs), (ins (MEMrr $rs1, $rs2):$addr),
+  let Defs = [FQ] in {
+    def STDFQrr : F3_1<3, 0b100110, (outs (MEMrr $rs1, $rs2):$addr), (ins),
 		   "std %fq, [$addr]", [], IIC_std>;
-    def STDFQri : F3_2<3, 0b100110, (outs), (ins (MEMri $rs1, $simm13):$addr),
+    def STDFQri : F3_2<3, 0b100110, (outs (MEMri $rs1, $simm13):$addr), (ins),
 		   "std %fq, [$addr]", [], IIC_std>;
   }
 }
-let rd = 1, mayStore = 1, Uses = [FSR] in {
-  def STXFSRrr : F3_1<3, 0b100101, (outs), (ins (MEMrr $rs1, $rs2):$addr),
+let rd = 1, Defs = [FSR] in {
+  def STXFSRrr : F3_1<3, 0b100101, (outs (MEMrr $rs1, $rs2):$addr), (ins),
 		 "stx %fsr, [$addr]", []>, Requires<[HasV9]>;
-  def STXFSRri : F3_2<3, 0b100101, (outs), (ins (MEMri $rs1, $simm13):$addr),
+  def STXFSRri : F3_2<3, 0b100101, (outs (MEMri $rs1, $simm13):$addr), (ins),
 		 "stx %fsr, [$addr]", []>, Requires<[HasV9]>;
 }
 

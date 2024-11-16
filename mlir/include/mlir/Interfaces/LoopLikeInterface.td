@@ -15,10 +15,6 @@
 
 include "mlir/IR/OpBase.td"
 
-//===----------------------------------------------------------------------===//
-// Interfaces
-//===----------------------------------------------------------------------===//
-
 def LoopLikeOpInterface : OpInterface<"LoopLikeOpInterface"> {
   let description = [{
     Contains helper functions to query properties and perform transformations
@@ -374,12 +370,5 @@ def LoopLikeOpInterface : OpInterface<"LoopLikeOpInterface"> {
     return detail::verifyLoopLikeOpInterface($_op);
   }];
 }
-
-//===----------------------------------------------------------------------===//
-// Traits
-//===----------------------------------------------------------------------===//
-
-// Op contains a region with parallel execution semantics
-def HasParallelRegion : NativeOpTrait<"HasParallelRegion">;
 
 #endif // MLIR_INTERFACES_LOOPLIKEINTERFACE

@@ -6,11 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "src/__support/threads/thread.h"
-#include "src/__support/threads/mutex.h"
+#include "thread.h"
+#include "mutex.h"
 
 #include "src/__support/CPP/array.h"
-#include "src/__support/CPP/mutex.h" // lock_guard
 #include "src/__support/CPP/optional.h"
 #include "src/__support/fixedvector.h"
 #include "src/__support/macros/attributes.h"
@@ -57,7 +56,7 @@ public:
   constexpr TSSKeyMgr() : mtx(false, false, false) {}
 
   cpp::optional<unsigned int> new_key(TSSDtor *dtor) {
-    cpp::lock_guard lock(mtx);
+    MutexLock lock(&mtx);
     for (unsigned int i = 0; i < TSS_KEY_COUNT; ++i) {
       TSSKeyUnit &u = units[i];
       if (!u.active) {
@@ -71,20 +70,20 @@ public:
   TSSDtor *get_dtor(unsigned int key) {
     if (key >= TSS_KEY_COUNT)
       return nullptr;
-    cpp::lock_guard lock(mtx);
+    MutexLock lock(&mtx);
     return units[key].dtor;
   }
 
   bool remove_key(unsigned int key) {
     if (key >= TSS_KEY_COUNT)
       return false;
-    cpp::lock_guard lock(mtx);
+    MutexLock lock(&mtx);
     units[key].reset();
     return true;
   }
 
   bool is_valid_key(unsigned int key) {
-    cpp::lock_guard lock(mtx);
+    MutexLock lock(&mtx);
     return units[key].active;
   }
 };
@@ -114,7 +113,7 @@ public:
   constexpr ThreadAtExitCallbackMgr() : mtx(false, false, false) {}
 
   int add_callback(AtExitCallback *callback, void *obj) {
-    cpp::lock_guard lock(mtx);
+    MutexLock lock(&mtx);
     return callback_list.push_back({callback, obj});
   }
 

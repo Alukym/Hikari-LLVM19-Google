@@ -276,7 +276,6 @@ LogicalResult Serializer::processDecorationAttr(Location loc, uint32_t resultID,
   case spirv::Decoration::RelaxedPrecision:
   case spirv::Decoration::Restrict:
   case spirv::Decoration::RestrictPointer:
-  case spirv::Decoration::NoContraction:
     // For unit attributes and decoration attributes, the args list
     // has no values so we do nothing.
     if (isa<UnitAttr, DecorationAttr>(attr))
@@ -1032,9 +1031,9 @@ Serializer::processBlock(Block *block, bool omitLabel,
   // into multiple basic blocks. If that's the case, we need to emit the merge
   // right now and then create new blocks for further serialization of the ops
   // in this block.
-  if (emitMerge &&
-      llvm::any_of(block->getOperations(),
-                   llvm::IsaPred<spirv::LoopOp, spirv::SelectionOp>)) {
+  if (emitMerge && llvm::any_of(block->getOperations(), [](Operation &op) {
+        return isa<spirv::LoopOp, spirv::SelectionOp>(op);
+      })) {
     if (failed(emitMerge()))
       return failure();
     emitMerge = nullptr;
@@ -1046,7 +1045,7 @@ Serializer::processBlock(Block *block, bool omitLabel,
   }
 
   // Process each op in this block except the terminator.
-  for (Operation &op : llvm::drop_end(*block)) {
+  for (auto &op : llvm::make_range(block->begin(), std::prev(block->end()))) {
     if (failed(processOperation(&op)))
       return failure();
   }

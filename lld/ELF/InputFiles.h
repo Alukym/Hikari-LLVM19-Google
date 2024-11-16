@@ -47,8 +47,8 @@ std::optional<MemoryBufferRef> readFile(StringRef path);
 
 // Add symbols in File to the symbol table.
 void parseFile(InputFile *file);
-void parseFiles(const std::vector<InputFile *> &files,
-                InputFile *armCmseImpLib);
+
+void parseArmCMSEImportLib(InputFile *file);
 
 // The root class of input files.
 class InputFile {
@@ -230,7 +230,6 @@ protected:
 public:
   uint32_t andFeatures = 0;
   bool hasCommonSyms = false;
-  ArrayRef<uint8_t> aarch64PauthAbiCoreInfo;
 };
 
 // .o file.

@@ -344,7 +344,7 @@ public:
     return StringRef(Tok.Data, Tok.Length);
   }
 
-  MCRegister getReg() const override {
+  unsigned getReg() const override {
     assert((Kind == k_Register) && "Invalid access!");
     return Reg.RegNum;
   }

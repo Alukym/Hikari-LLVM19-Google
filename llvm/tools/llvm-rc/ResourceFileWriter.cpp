@@ -550,11 +550,6 @@ Error ResourceFileWriter::visitVersionStmt(const VersionStmt *Stmt) {
   return Error::success();
 }
 
-Error ResourceFileWriter::visitMenuStmt(const MenuStmt *Stmt) {
-  ObjectData.Menu = Stmt->Value;
-  return Error::success();
-}
-
 Error ResourceFileWriter::writeResource(
     const RCResource *Res,
     Error (ResourceFileWriter::*BodyWriter)(const RCResource *)) {
@@ -1137,8 +1132,9 @@ Error ResourceFileWriter::writeDialogBody(const RCResource *Base) {
            ulittle16_t(Res->Height)};
   writeObject(Middle);
 
-  // MENU field.
-  RETURN_IF_ERROR(writeIntOrString(ObjectData.Menu));
+  // MENU field. As of now, we don't keep them in the state and can peacefully
+  // think there is no menu attached to the dialog.
+  writeInt<uint16_t>(0);
 
   // Window CLASS field.
   RETURN_IF_ERROR(writeIntOrString(ObjectData.Class));

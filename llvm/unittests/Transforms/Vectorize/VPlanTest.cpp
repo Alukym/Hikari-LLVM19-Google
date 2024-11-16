@@ -895,16 +895,13 @@ TEST(VPRecipeTest, CastVPWidenCallRecipeToVPUserAndVPDef) {
 
   IntegerType *Int32 = IntegerType::get(C, 32);
   FunctionType *FTy = FunctionType::get(Int32, false);
-  Function *Fn = Function::Create(FTy, GlobalValue::ExternalLinkage, 0);
-  auto *Call = CallInst::Create(FTy, Fn);
+  auto *Call = CallInst::Create(FTy, UndefValue::get(FTy));
   VPValue Op1;
   VPValue Op2;
-  VPValue CalledFn(Call->getCalledFunction());
   SmallVector<VPValue *, 2> Args;
   Args.push_back(&Op1);
   Args.push_back(&Op2);
-  Args.push_back(&CalledFn);
-  VPWidenCallRecipe Recipe(Call, make_range(Args.begin(), Args.end()), false);
+  VPWidenCallRecipe Recipe(*Call, make_range(Args.begin(), Args.end()), false);
   EXPECT_TRUE(isa<VPUser>(&Recipe));
   VPRecipeBase *BaseR = &Recipe;
   EXPECT_TRUE(isa<VPUser>(BaseR));
@@ -915,7 +912,6 @@ TEST(VPRecipeTest, CastVPWidenCallRecipeToVPUserAndVPDef) {
   EXPECT_EQ(&Recipe, VPV->getDefiningRecipe());
 
   delete Call;
-  delete Fn;
 }
 
 TEST(VPRecipeTest, CastVPWidenSelectRecipeToVPUserAndVPDef) {
@@ -976,13 +972,11 @@ TEST(VPRecipeTest, CastVPBlendRecipeToVPUser) {
 
   IntegerType *Int32 = IntegerType::get(C, 32);
   auto *Phi = PHINode::Create(Int32, 1);
-  VPValue I1;
-  VPValue I2;
-  VPValue M2;
+  VPValue Op1;
+  VPValue Op2;
   SmallVector<VPValue *, 4> Args;
-  Args.push_back(&I1);
-  Args.push_back(&I2);
-  Args.push_back(&M2);
+  Args.push_back(&Op1);
+  Args.push_back(&Op2);
   VPBlendRecipe Recipe(Phi, Args);
   EXPECT_TRUE(isa<VPUser>(&Recipe));
   VPRecipeBase *BaseR = &Recipe;
@@ -1033,7 +1027,7 @@ TEST(VPRecipeTest, CastVPBranchOnMaskRecipeToVPUser) {
   EXPECT_EQ(&Recipe, BaseR);
 }
 
-TEST(VPRecipeTest, CastVPWidenMemoryRecipeToVPUserAndVPDef) {
+TEST(VPRecipeTest, CastVPWidenMemoryInstructionRecipeToVPUserAndVPDef) {
   LLVMContext C;
 
   IntegerType *Int32 = IntegerType::get(C, 32);
@@ -1042,7 +1036,7 @@ TEST(VPRecipeTest, CastVPWidenMemoryRecipeToVPUserAndVPDef) {
       new LoadInst(Int32, UndefValue::get(Int32Ptr), "", false, Align(1));
   VPValue Addr;
   VPValue Mask;
-  VPWidenLoadRecipe Recipe(*Load, &Addr, &Mask, true, false, {});
+  VPWidenMemoryInstructionRecipe Recipe(*Load, &Addr, &Mask, true, false);
   EXPECT_TRUE(isa<VPUser>(&Recipe));
   VPRecipeBase *BaseR = &Recipe;
   EXPECT_TRUE(isa<VPUser>(BaseR));
@@ -1125,7 +1119,7 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
     VPValue VecOp;
     VPValue CondOp;
     VPReductionRecipe Recipe(RecurrenceDescriptor(), nullptr, &ChainOp, &CondOp,
-                             &VecOp, false);
+                             &VecOp);
     EXPECT_FALSE(Recipe.mayHaveSideEffects());
     EXPECT_FALSE(Recipe.mayReadFromMemory());
     EXPECT_FALSE(Recipe.mayWriteToMemory());
@@ -1137,7 +1131,7 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
         new LoadInst(Int32, UndefValue::get(Int32Ptr), "", false, Align(1));
     VPValue Addr;
     VPValue Mask;
-    VPWidenLoadRecipe Recipe(*Load, &Addr, &Mask, true, false, {});
+    VPWidenMemoryInstructionRecipe Recipe(*Load, &Addr, &Mask, true, false);
     EXPECT_FALSE(Recipe.mayHaveSideEffects());
     EXPECT_TRUE(Recipe.mayReadFromMemory());
     EXPECT_FALSE(Recipe.mayWriteToMemory());
@@ -1151,7 +1145,8 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
     VPValue Addr;
     VPValue Mask;
     VPValue StoredV;
-    VPWidenStoreRecipe Recipe(*Store, &Addr, &StoredV, &Mask, false, false, {});
+    VPWidenMemoryInstructionRecipe Recipe(*Store, &Addr, &StoredV, &Mask, false,
+                                          false);
     EXPECT_TRUE(Recipe.mayHaveSideEffects());
     EXPECT_FALSE(Recipe.mayReadFromMemory());
     EXPECT_TRUE(Recipe.mayWriteToMemory());
@@ -1161,22 +1156,19 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
 
   {
     FunctionType *FTy = FunctionType::get(Int32, false);
-    Function *Fn = Function::Create(FTy, GlobalValue::ExternalLinkage, 0);
-    auto *Call = CallInst::Create(FTy, Fn);
+    auto *Call = CallInst::Create(FTy, UndefValue::get(FTy));
     VPValue Op1;
     VPValue Op2;
-    VPValue CalledFn(Call->getCalledFunction());
-    SmallVector<VPValue *, 3> Args;
+    SmallVector<VPValue *, 2> Args;
     Args.push_back(&Op1);
     Args.push_back(&Op2);
-    Args.push_back(&CalledFn);
-    VPWidenCallRecipe Recipe(Call, make_range(Args.begin(), Args.end()), false);
+    VPWidenCallRecipe Recipe(*Call, make_range(Args.begin(), Args.end()),
+                             false);
     EXPECT_TRUE(Recipe.mayHaveSideEffects());
     EXPECT_TRUE(Recipe.mayReadFromMemory());
     EXPECT_TRUE(Recipe.mayWriteToMemory());
     EXPECT_TRUE(Recipe.mayReadOrWriteMemory());
     delete Call;
-    delete Fn;
   }
 
   {
@@ -1188,12 +1180,11 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
     auto *Call = CallInst::Create(TheFn->getFunctionType(), TheFn);
     VPValue Op1;
     VPValue Op2;
-    VPValue CalledFn(TheFn);
-    SmallVector<VPValue *, 3> Args;
+    SmallVector<VPValue *, 2> Args;
     Args.push_back(&Op1);
     Args.push_back(&Op2);
-    Args.push_back(&CalledFn);
-    VPWidenCallRecipe Recipe(Call, make_range(Args.begin(), Args.end()), false);
+    VPWidenCallRecipe Recipe(*Call, make_range(Args.begin(), Args.end()),
+                             false);
     EXPECT_FALSE(Recipe.mayHaveSideEffects());
     EXPECT_FALSE(Recipe.mayReadFromMemory());
     EXPECT_FALSE(Recipe.mayWriteToMemory());
@@ -1234,7 +1225,7 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-TEST(VPRecipeTest, dumpRecipeInPlan) {
+TEST(VPRecipeTest, dump) {
   VPBasicBlock *VPBB0 = new VPBasicBlock("preheader");
   VPBasicBlock *VPBB1 = new VPBasicBlock();
   VPlan Plan(VPBB0, VPBB1);
@@ -1246,8 +1237,8 @@ TEST(VPRecipeTest, dumpRecipeInPlan) {
       BinaryOperator::CreateAdd(UndefValue::get(Int32), UndefValue::get(Int32));
   AI->setName("a");
   SmallVector<VPValue *, 2> Args;
-  VPValue *ExtVPV1 = Plan.getOrAddLiveIn(ConstantInt::get(Int32, 1));
-  VPValue *ExtVPV2 = Plan.getOrAddLiveIn(ConstantInt::get(Int32, 2));
+  VPValue *ExtVPV1 = Plan.getVPValueOrAddLiveIn(ConstantInt::get(Int32, 1));
+  VPValue *ExtVPV2 = Plan.getVPValueOrAddLiveIn(ConstantInt::get(Int32, 2));
   Args.push_back(ExtVPV1);
   Args.push_back(ExtVPV2);
   VPWidenRecipe *WidenR =
@@ -1287,175 +1278,6 @@ TEST(VPRecipeTest, dumpRecipeInPlan) {
 
   delete AI;
 }
-
-TEST(VPRecipeTest, dumpRecipeUnnamedVPValuesInPlan) {
-  VPBasicBlock *VPBB0 = new VPBasicBlock("preheader");
-  VPBasicBlock *VPBB1 = new VPBasicBlock();
-  VPlan Plan(VPBB0, VPBB1);
-
-  LLVMContext C;
-
-  IntegerType *Int32 = IntegerType::get(C, 32);
-  auto *AI =
-      BinaryOperator::CreateAdd(UndefValue::get(Int32), UndefValue::get(Int32));
-  AI->setName("a");
-  SmallVector<VPValue *, 2> Args;
-  VPValue *ExtVPV1 = Plan.getOrAddLiveIn(ConstantInt::get(Int32, 1));
-  VPValue *ExtVPV2 = Plan.getOrAddLiveIn(AI);
-  Args.push_back(ExtVPV1);
-  Args.push_back(ExtVPV2);
-  VPInstruction *I1 = new VPInstruction(Instruction::Add, {ExtVPV1, ExtVPV2});
-  VPInstruction *I2 = new VPInstruction(Instruction::Mul, {I1, I1});
-  VPBB1->appendRecipe(I1);
-  VPBB1->appendRecipe(I2);
-
-  // Check printing I1.
-  {
-    // Use EXPECT_EXIT to capture stderr and compare against expected output.
-    //
-    // Test VPValue::dump().
-    VPValue *VPV = I1;
-    EXPECT_EXIT(
-        {
-          VPV->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%1> = add ir<1>, ir<%a>");
-
-    // Test VPRecipeBase::dump().
-    VPRecipeBase *R = I1;
-    EXPECT_EXIT(
-        {
-          R->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%1> = add ir<1>, ir<%a>");
-
-    // Test VPDef::dump().
-    VPDef *D = I1;
-    EXPECT_EXIT(
-        {
-          D->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%1> = add ir<1>, ir<%a>");
-  }
-  // Check printing I2.
-  {
-    // Use EXPECT_EXIT to capture stderr and compare against expected output.
-    //
-    // Test VPValue::dump().
-    VPValue *VPV = I2;
-    EXPECT_EXIT(
-        {
-          VPV->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%2> = mul vp<%1>, vp<%1>");
-
-    // Test VPRecipeBase::dump().
-    VPRecipeBase *R = I2;
-    EXPECT_EXIT(
-        {
-          R->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%2> = mul vp<%1>, vp<%1>");
-
-    // Test VPDef::dump().
-    VPDef *D = I2;
-    EXPECT_EXIT(
-        {
-          D->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT vp<%2> = mul vp<%1>, vp<%1>");
-  }
-  delete AI;
-}
-
-TEST(VPRecipeTest, dumpRecipeUnnamedVPValuesNotInPlanOrBlock) {
-  LLVMContext C;
-  IntegerType *Int32 = IntegerType::get(C, 32);
-  auto *AI =
-      BinaryOperator::CreateAdd(UndefValue::get(Int32), UndefValue::get(Int32));
-  AI->setName("a");
-  VPValue *ExtVPV1 = new VPValue(ConstantInt::get(Int32, 1));
-  VPValue *ExtVPV2 = new VPValue(AI);
-
-  VPInstruction *I1 = new VPInstruction(Instruction::Add, {ExtVPV1, ExtVPV2});
-  VPInstruction *I2 = new VPInstruction(Instruction::Mul, {I1, I1});
-
-  // Check printing I1.
-  {
-    // Use EXPECT_EXIT to capture stderr and compare against expected output.
-    //
-    // Test VPValue::dump().
-    VPValue *VPV = I1;
-    EXPECT_EXIT(
-        {
-          VPV->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = add ir<1>, ir<%a>");
-
-    // Test VPRecipeBase::dump().
-    VPRecipeBase *R = I1;
-    EXPECT_EXIT(
-        {
-          R->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = add ir<1>, ir<%a>");
-
-    // Test VPDef::dump().
-    VPDef *D = I1;
-    EXPECT_EXIT(
-        {
-          D->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = add ir<1>, ir<%a>");
-  }
-  // Check printing I2.
-  {
-    // Use EXPECT_EXIT to capture stderr and compare against expected output.
-    //
-    // Test VPValue::dump().
-    VPValue *VPV = I2;
-    EXPECT_EXIT(
-        {
-          VPV->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = mul <badref>, <badref>");
-
-    // Test VPRecipeBase::dump().
-    VPRecipeBase *R = I2;
-    EXPECT_EXIT(
-        {
-          R->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = mul <badref>, <badref>");
-
-    // Test VPDef::dump().
-    VPDef *D = I2;
-    EXPECT_EXIT(
-        {
-          D->dump();
-          exit(0);
-        },
-        testing::ExitedWithCode(0), "EMIT <badref> = mul <badref>, <badref>");
-  }
-
-  delete I2;
-  delete I1;
-  delete ExtVPV2;
-  delete ExtVPV1;
-  delete AI;
-}
-
 #endif
 
 TEST(VPRecipeTest, CastVPReductionRecipeToVPUser) {
@@ -1465,7 +1287,7 @@ TEST(VPRecipeTest, CastVPReductionRecipeToVPUser) {
   VPValue VecOp;
   VPValue CondOp;
   VPReductionRecipe Recipe(RecurrenceDescriptor(), nullptr, &ChainOp, &CondOp,
-                           &VecOp, false);
+                           &VecOp);
   EXPECT_TRUE(isa<VPUser>(&Recipe));
   VPRecipeBase *BaseR = &Recipe;
   EXPECT_TRUE(isa<VPUser>(BaseR));
@@ -1528,14 +1350,6 @@ TEST(VPDoubleValueDefTest, traverseUseLists) {
   EXPECT_EQ(&DoubleValueDef, I1.getOperand(1)->getDefiningRecipe());
   EXPECT_EQ(&DoubleValueDef, I2.getOperand(0)->getDefiningRecipe());
   EXPECT_EQ(&DoubleValueDef, I3.getOperand(0)->getDefiningRecipe());
-}
-
-TEST(VPRecipeTest, CastToVPSingleDefRecipe) {
-  VPValue Start;
-  VPEVLBasedIVPHIRecipe R(&Start, {});
-  VPRecipeBase *B = &R;
-  EXPECT_TRUE(isa<VPSingleDefRecipe>(B));
-  // TODO: check other VPSingleDefRecipes.
 }
 
 } // namespace

@@ -135,11 +135,6 @@ static cl::opt<bool> TryUseNewDbgInfoFormat(
     cl::init(false));
 
 extern cl::opt<bool> UseNewDbgInfoFormat;
-extern cl::opt<cl::boolOrDefault> PreserveInputDbgFormat;
-extern cl::opt<bool> WriteNewDbgInfoFormat;
-extern bool WriteNewDbgInfoFormatToBitcode;
-
-extern cl::opt<cl::boolOrDefault> LoadBitcodeIntoNewDbgInfoFormat;
 
 static ExitOnError ExitOnErr;
 
@@ -485,14 +480,12 @@ int main(int argc, char **argv) {
   cl::HideUnrelatedOptions({&LinkCategory, &getColorCategory()});
   cl::ParseCommandLineOptions(argc, argv, "llvm linker\n");
 
-  // Load bitcode into the new debug info format by default.
-  if (LoadBitcodeIntoNewDbgInfoFormat == cl::boolOrDefault::BOU_UNSET)
-    LoadBitcodeIntoNewDbgInfoFormat = cl::boolOrDefault::BOU_TRUE;
-
-  // Since llvm-link collects multiple IR modules together, for simplicity's
-  // sake we disable the "PreserveInputDbgFormat" flag to enforce a single
-  // debug info format.
-  PreserveInputDbgFormat = cl::boolOrDefault::BOU_FALSE;
+  // RemoveDIs debug-info transition: tests may request that we /try/ to use the
+  // new debug-info format.
+  if (TryUseNewDbgInfoFormat) {
+    // Turn the new debug-info format on.
+    UseNewDbgInfoFormat = true;
+  }
 
   LLVMContext Context;
   Context.setDiagnosticHandler(std::make_unique<LLVMLinkDiagnosticHandler>(),
@@ -541,18 +534,10 @@ int main(int argc, char **argv) {
 
   if (Verbose)
     errs() << "Writing bitcode...\n";
-  auto SetFormat = [&](bool NewFormat) {
-    Composite->setIsNewDbgInfoFormat(NewFormat);
-    if (NewFormat)
-      Composite->removeDebugIntrinsicDeclarations();
-  };
   if (OutputAssembly) {
-    SetFormat(WriteNewDbgInfoFormat);
     Composite->print(Out.os(), nullptr, PreserveAssemblyUseListOrder);
-  } else if (Force || !CheckBitcodeOutputToConsole(Out.os())) {
-    SetFormat(UseNewDbgInfoFormat && WriteNewDbgInfoFormatToBitcode);
+  } else if (Force || !CheckBitcodeOutputToConsole(Out.os()))
     WriteBitcodeToFile(*Composite, Out.os(), PreserveBitcodeUseListOrder);
-  }
 
   // Declare success.
   Out.keep();

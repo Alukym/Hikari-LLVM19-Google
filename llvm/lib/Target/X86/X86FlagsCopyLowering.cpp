@@ -442,8 +442,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
           llvm::reverse(llvm::make_range(Begin, End)), [&](MachineInstr &MI) {
             // Flag any instruction (other than the copy we are
             // currently rewriting) that defs EFLAGS.
-            return &MI != CopyI &&
-                   MI.findRegisterDefOperand(X86::EFLAGS, /*TRI=*/nullptr);
+            return &MI != CopyI && MI.findRegisterDefOperand(X86::EFLAGS);
           });
     };
     auto HasEFLAGSClobberPath = [&](MachineBasicBlock *BeginMBB,
@@ -501,7 +500,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
       auto DefIt = llvm::find_if(
           llvm::reverse(llvm::make_range(TestMBB->instr_begin(), TestPos)),
           [&](MachineInstr &MI) {
-            return MI.findRegisterDefOperand(X86::EFLAGS, /*TRI=*/nullptr);
+            return MI.findRegisterDefOperand(X86::EFLAGS);
           });
       if (DefIt.base() != TestMBB->instr_begin()) {
         dbgs() << "  Using EFLAGS defined by: ";
@@ -563,10 +562,9 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
           break;
         }
 
-        MachineOperand *FlagUse =
-            MI.findRegisterUseOperand(X86::EFLAGS, /*TRI=*/nullptr);
+        MachineOperand *FlagUse = MI.findRegisterUseOperand(X86::EFLAGS);
         if (!FlagUse) {
-          if (MI.findRegisterDefOperand(X86::EFLAGS, /*TRI=*/nullptr)) {
+          if (MI.findRegisterDefOperand(X86::EFLAGS)) {
             // If EFLAGS are defined, it's as-if they were killed. We can stop
             // scanning here.
             //
@@ -606,8 +604,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
         }
 
         // Otherwise we can just rewrite in-place.
-        if (X86::getCondFromCMov(MI) != X86::COND_INVALID ||
-            X86::getCondFromCFCMov(MI) != X86::COND_INVALID) {
+        if (X86::getCondFromCMov(MI) != X86::COND_INVALID) {
           rewriteCMov(*TestMBB, TestPos, TestLoc, MI, *FlagUse, CondRegs);
         } else if (getCondFromFCMOV(MI.getOpcode()) != X86::COND_INVALID) {
           rewriteFCMov(*TestMBB, TestPos, TestLoc, MI, *FlagUse, CondRegs);
@@ -617,7 +614,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
           rewriteCopy(MI, *FlagUse, CopyDefI);
         } else {
           // We assume all other instructions that use flags also def them.
-          assert(MI.findRegisterDefOperand(X86::EFLAGS, /*TRI=*/nullptr) &&
+          assert(MI.findRegisterDefOperand(X86::EFLAGS) &&
                  "Expected a def of EFLAGS for this instruction!");
 
           // NB!!! Several arithmetic instructions only *partially* update
@@ -736,7 +733,7 @@ CondRegArray X86FlagsCopyLoweringPass::collectCondsInRegs(
 
     // Stop scanning when we see the first definition of the EFLAGS as prior to
     // this we would potentially capture the wrong flag state.
-    if (MI.findRegisterDefOperand(X86::EFLAGS, /*TRI=*/nullptr))
+    if (MI.findRegisterDefOperand(X86::EFLAGS))
       break;
   }
   return CondRegs;
@@ -832,9 +829,7 @@ void X86FlagsCopyLoweringPass::rewriteCMov(MachineBasicBlock &TestMBB,
                                            MachineOperand &FlagUse,
                                            CondRegArray &CondRegs) {
   // First get the register containing this specific condition.
-  X86::CondCode Cond = X86::getCondFromCMov(CMovI) == X86::COND_INVALID
-                           ? X86::getCondFromCFCMov(CMovI)
-                           : X86::getCondFromCMov(CMovI);
+  X86::CondCode Cond = X86::getCondFromCMov(CMovI);
   unsigned CondReg;
   bool Inverted;
   std::tie(CondReg, Inverted) =
@@ -916,7 +911,7 @@ void X86FlagsCopyLoweringPass::rewriteCondJmp(
   // Rewrite the jump to use the !ZF flag from the test, and kill its use of
   // flags afterward.
   JmpI.getOperand(1).setImm(Inverted ? X86::COND_E : X86::COND_NE);
-  JmpI.findRegisterUseOperand(X86::EFLAGS, /*TRI=*/nullptr)->setIsKill(true);
+  JmpI.findRegisterUseOperand(X86::EFLAGS)->setIsKill(true);
   LLVM_DEBUG(dbgs() << "    fixed jCC: "; JmpI.dump());
 }
 

@@ -24,7 +24,7 @@ class MachineFunction;
 class Module;
 template <typename T> class SmallVectorImpl;
 
-class PrintMIRPreparePass : public PassInfoMixin<PrintMIRPreparePass> {
+class PrintMIRPreparePass : public MachinePassInfoMixin<PrintMIRPreparePass> {
   raw_ostream &OS;
 
 public:
@@ -32,7 +32,7 @@ public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &MFAM);
 };
 
-class PrintMIRPass : public PassInfoMixin<PrintMIRPass> {
+class PrintMIRPass : public MachinePassInfoMixin<PrintMIRPass> {
   raw_ostream &OS;
 
 public:

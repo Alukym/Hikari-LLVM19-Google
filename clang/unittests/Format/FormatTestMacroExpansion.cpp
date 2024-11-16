@@ -43,10 +43,9 @@ TEST_F(FormatTestMacroExpansion, UnexpandConfiguredMacros) {
                "STMT",
                Style);
   verifyFormat("void f() { ID(a *b); }", Style);
-  verifyFormat("ID(\n"
-               "    {\n"
-               "      ID(a *b);\n"
-               "    });",
+  verifyFormat(R"(ID(
+    { ID(a *b); });
+)",
                Style);
   verifyIncompleteFormat("ID3({, ID(a *b),\n"
                          "    ;\n"

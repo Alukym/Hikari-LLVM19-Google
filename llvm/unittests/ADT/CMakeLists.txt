@@ -44,7 +44,6 @@ add_llvm_unittest(ADTTests
   ImmutableMapTest.cpp
   ImmutableSetTest.cpp
   IntEqClassesTest.cpp
-  Interleave.cpp
   IntervalMapTest.cpp
   IntervalTreeTest.cpp
   IntrusiveRefCntPtrTest.cpp

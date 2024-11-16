@@ -23,7 +23,6 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
-#include "llvm/IR/Mangler.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Pass.h"
@@ -31,7 +30,7 @@
 #include "llvm/TargetParser/Triple.h"
 
 using namespace llvm;
-using namespace llvm::COFF;
+using namespace llvm::object;
 
 using OperandBundleDef = OperandBundleDefT<Value *>;
 
@@ -45,6 +44,8 @@ static cl::opt<bool> GenerateThunks("arm64ec-generate-thunks", cl::Hidden,
                                     cl::init(true));
 
 namespace {
+
+enum class ThunkType { GuestExit, Entry, Exit };
 
 class AArch64Arm64ECCallLowering : public ModulePass {
 public:
@@ -72,15 +73,15 @@ private:
   Type *I64Ty;
   Type *VoidTy;
 
-  void getThunkType(FunctionType *FT, AttributeList AttrList,
-                    Arm64ECThunkType TT, raw_ostream &Out,
-                    FunctionType *&Arm64Ty, FunctionType *&X64Ty);
+  void getThunkType(FunctionType *FT, AttributeList AttrList, ThunkType TT,
+                    raw_ostream &Out, FunctionType *&Arm64Ty,
+                    FunctionType *&X64Ty);
   void getThunkRetType(FunctionType *FT, AttributeList AttrList,
                        raw_ostream &Out, Type *&Arm64RetTy, Type *&X64RetTy,
                        SmallVectorImpl<Type *> &Arm64ArgTypes,
                        SmallVectorImpl<Type *> &X64ArgTypes, bool &HasSretPtr);
-  void getThunkArgTypes(FunctionType *FT, AttributeList AttrList,
-                        Arm64ECThunkType TT, raw_ostream &Out,
+  void getThunkArgTypes(FunctionType *FT, AttributeList AttrList, ThunkType TT,
+                        raw_ostream &Out,
                         SmallVectorImpl<Type *> &Arm64ArgTypes,
                         SmallVectorImpl<Type *> &X64ArgTypes, bool HasSretPtr);
   void canonicalizeThunkType(Type *T, Align Alignment, bool Ret,
@@ -90,11 +91,13 @@ private:
 
 } // end anonymous namespace
 
-void AArch64Arm64ECCallLowering::getThunkType(
-    FunctionType *FT, AttributeList AttrList, Arm64ECThunkType TT,
-    raw_ostream &Out, FunctionType *&Arm64Ty, FunctionType *&X64Ty) {
-  Out << (TT == Arm64ECThunkType::Entry ? "$ientry_thunk$cdecl$"
-                                        : "$iexit_thunk$cdecl$");
+void AArch64Arm64ECCallLowering::getThunkType(FunctionType *FT,
+                                              AttributeList AttrList,
+                                              ThunkType TT, raw_ostream &Out,
+                                              FunctionType *&Arm64Ty,
+                                              FunctionType *&X64Ty) {
+  Out << (TT == ThunkType::Entry ? "$ientry_thunk$cdecl$"
+                                 : "$iexit_thunk$cdecl$");
 
   Type *Arm64RetTy;
   Type *X64RetTy;
@@ -105,7 +108,7 @@ void AArch64Arm64ECCallLowering::getThunkType(
   // The first argument to a thunk is the called function, stored in x9.
   // For exit thunks, we pass the called function down to the emulator;
   // for entry/guest exit thunks, we just call the Arm64 function directly.
-  if (TT == Arm64ECThunkType::Exit)
+  if (TT == ThunkType::Exit)
     Arm64ArgTypes.push_back(PtrTy);
   X64ArgTypes.push_back(PtrTy);
 
@@ -122,8 +125,8 @@ void AArch64Arm64ECCallLowering::getThunkType(
 }
 
 void AArch64Arm64ECCallLowering::getThunkArgTypes(
-    FunctionType *FT, AttributeList AttrList, Arm64ECThunkType TT,
-    raw_ostream &Out, SmallVectorImpl<Type *> &Arm64ArgTypes,
+    FunctionType *FT, AttributeList AttrList, ThunkType TT, raw_ostream &Out,
+    SmallVectorImpl<Type *> &Arm64ArgTypes,
     SmallVectorImpl<Type *> &X64ArgTypes, bool HasSretPtr) {
 
   Out << "$";
@@ -160,7 +163,7 @@ void AArch64Arm64ECCallLowering::getThunkArgTypes(
     X64ArgTypes.push_back(PtrTy);
     // x5
     Arm64ArgTypes.push_back(I64Ty);
-    if (TT != Arm64ECThunkType::Entry) {
+    if (TT != ThunkType::Entry) {
       // FIXME: x5 isn't actually used by the x64 side; revisit once we
       // have proper isel for varargs
       X64ArgTypes.push_back(I64Ty);
@@ -178,14 +181,13 @@ void AArch64Arm64ECCallLowering::getThunkArgTypes(
   }
 
   for (unsigned E = FT->getNumParams(); I != E; ++I) {
+    Align ParamAlign = AttrList.getParamAlignment(I).valueOrOne();
 #if 0
     // FIXME: Need more information about argument size; see
     // https://reviews.llvm.org/D132926
     uint64_t ArgSizeBytes = AttrList.getParamArm64ECArgSizeBytes(I);
-    Align ParamAlign = AttrList.getParamAlignment(I).valueOrOne();
 #else
     uint64_t ArgSizeBytes = 0;
-    Align ParamAlign = Align();
 #endif
     Type *Arm64Ty, *X64Ty;
     canonicalizeThunkType(FT->getParamType(I), ParamAlign,
@@ -295,7 +297,7 @@ void AArch64Arm64ECCallLowering::canonicalizeThunkType(
     uint64_t TotalSizeBytes = ElementCnt * ElementSizePerBytes;
     if (ElementTy->isFloatTy() || ElementTy->isDoubleTy()) {
       Out << (ElementTy->isFloatTy() ? "F" : "D") << TotalSizeBytes;
-      if (Alignment.value() >= 16 && !Ret)
+      if (Alignment.value() >= 8 && !T->isPointerTy())
         Out << "a" << Alignment.value();
       Arm64Ty = T;
       if (TotalSizeBytes <= 8) {
@@ -326,7 +328,7 @@ void AArch64Arm64ECCallLowering::canonicalizeThunkType(
   Out << "m";
   if (TypeSize != 4)
     Out << TypeSize;
-  if (Alignment.value() >= 16 && !Ret)
+  if (Alignment.value() >= 8 && !T->isPointerTy())
     Out << "a" << Alignment.value();
   // FIXME: Try to canonicalize Arm64Ty more thoroughly?
   Arm64Ty = T;
@@ -346,8 +348,7 @@ Function *AArch64Arm64ECCallLowering::buildExitThunk(FunctionType *FT,
   SmallString<256> ExitThunkName;
   llvm::raw_svector_ostream ExitThunkStream(ExitThunkName);
   FunctionType *Arm64Ty, *X64Ty;
-  getThunkType(FT, Attrs, Arm64ECThunkType::Exit, ExitThunkStream, Arm64Ty,
-               X64Ty);
+  getThunkType(FT, Attrs, ThunkType::Exit, ExitThunkStream, Arm64Ty, X64Ty);
   if (Function *F = M->getFunction(ExitThunkName))
     return F;
 
@@ -450,8 +451,8 @@ Function *AArch64Arm64ECCallLowering::buildEntryThunk(Function *F) {
   SmallString<256> EntryThunkName;
   llvm::raw_svector_ostream EntryThunkStream(EntryThunkName);
   FunctionType *Arm64Ty, *X64Ty;
-  getThunkType(F->getFunctionType(), F->getAttributes(),
-               Arm64ECThunkType::Entry, EntryThunkStream, Arm64Ty, X64Ty);
+  getThunkType(F->getFunctionType(), F->getAttributes(), ThunkType::Entry,
+               EntryThunkStream, Arm64Ty, X64Ty);
   if (Function *F = M->getFunction(EntryThunkName))
     return F;
 
@@ -542,8 +543,8 @@ Function *AArch64Arm64ECCallLowering::buildEntryThunk(Function *F) {
 Function *AArch64Arm64ECCallLowering::buildGuestExitThunk(Function *F) {
   llvm::raw_null_ostream NullThunkName;
   FunctionType *Arm64Ty, *X64Ty;
-  getThunkType(F->getFunctionType(), F->getAttributes(),
-               Arm64ECThunkType::GuestExit, NullThunkName, Arm64Ty, X64Ty);
+  getThunkType(F->getFunctionType(), F->getAttributes(), ThunkType::GuestExit,
+               NullThunkName, Arm64Ty, X64Ty);
   auto MangledName = getArm64ECMangledFunctionName(F->getName().str());
   assert(MangledName && "Can't guest exit to function that's already native");
   std::string ThunkName = *MangledName;
@@ -678,7 +679,7 @@ bool AArch64Arm64ECCallLowering::runOnModule(Module &Mod) {
   struct ThunkInfo {
     Constant *Src;
     Constant *Dst;
-    Arm64ECThunkType Kind;
+    unsigned Kind;
   };
   SmallVector<ThunkInfo> ThunkMapping;
   for (Function &F : Mod) {
@@ -687,17 +688,14 @@ bool AArch64Arm64ECCallLowering::runOnModule(Module &Mod) {
         F.getCallingConv() != CallingConv::ARM64EC_Thunk_X64) {
       if (!F.hasComdat())
         F.setComdat(Mod.getOrInsertComdat(F.getName()));
-      ThunkMapping.push_back(
-          {&F, buildEntryThunk(&F), Arm64ECThunkType::Entry});
+      ThunkMapping.push_back({&F, buildEntryThunk(&F), 1});
     }
   }
   for (Function *F : DirectCalledFns) {
     ThunkMapping.push_back(
-        {F, buildExitThunk(F->getFunctionType(), F->getAttributes()),
-         Arm64ECThunkType::Exit});
+        {F, buildExitThunk(F->getFunctionType(), F->getAttributes()), 4});
     if (!F->hasDLLImportStorageClass())
-      ThunkMapping.push_back(
-          {buildGuestExitThunk(F), F, Arm64ECThunkType::GuestExit});
+      ThunkMapping.push_back({buildGuestExitThunk(F), F, 0});
   }
 
   if (!ThunkMapping.empty()) {
@@ -706,7 +704,7 @@ bool AArch64Arm64ECCallLowering::runOnModule(Module &Mod) {
       ThunkMappingArrayElems.push_back(ConstantStruct::getAnon(
           {ConstantExpr::getBitCast(Thunk.Src, PtrTy),
            ConstantExpr::getBitCast(Thunk.Dst, PtrTy),
-           ConstantInt::get(M->getContext(), APInt(32, uint8_t(Thunk.Kind)))}));
+           ConstantInt::get(M->getContext(), APInt(32, Thunk.Kind))}));
     }
     Constant *ThunkMappingArray = ConstantArray::get(
         llvm::ArrayType::get(ThunkMappingArrayElems[0]->getType(),

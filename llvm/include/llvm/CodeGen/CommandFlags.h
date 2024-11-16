@@ -122,8 +122,6 @@ bool getUniqueSectionNames();
 
 bool getUniqueBasicBlockSectionNames();
 
-bool getSeparateNamedSections();
-
 llvm::EABI getEABIVersion();
 
 llvm::DebuggerKind getDebuggerTuningOpt();

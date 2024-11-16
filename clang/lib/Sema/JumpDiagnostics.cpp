@@ -16,7 +16,6 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/StmtObjC.h"
-#include "clang/AST/StmtOpenACC.h"
 #include "clang/AST/StmtOpenMP.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Sema/SemaInternal.h"
@@ -180,8 +179,7 @@ static ScopePair GetDiagForGotoScopeDecl(Sema &S, const Decl *D) {
     }
 
     const Expr *Init = VD->getInit();
-    if (S.Context.getLangOpts().CPlusPlus && VD->hasLocalStorage() && Init &&
-        !Init->containsErrors()) {
+    if (S.Context.getLangOpts().CPlusPlus && VD->hasLocalStorage() && Init) {
       // C++11 [stmt.dcl]p3:
       //   A program that jumps from a point where a variable with automatic
       //   storage duration is not in scope to a point where it is in scope

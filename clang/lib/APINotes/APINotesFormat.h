@@ -24,10 +24,7 @@ const uint16_t VERSION_MAJOR = 0;
 /// API notes file minor version number.
 ///
 /// When the format changes IN ANY WAY, this number should be incremented.
-const uint16_t VERSION_MINOR = 26; // SwiftCopyable
-
-const uint8_t kSwiftCopyable = 1;
-const uint8_t kSwiftNonCopyable = 2;
+const uint16_t VERSION_MINOR = 25; // SwiftImportAs
 
 using IdentifierID = llvm::PointerEmbeddedInt<unsigned, 31>;
 using IdentifierIDField = llvm::BCVBR<16>;

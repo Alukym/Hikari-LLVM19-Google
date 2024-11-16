@@ -87,9 +87,6 @@ void populateFIRToLLVMConversionPatterns(fir::LLVMTypeConverter &converter,
                                          mlir::RewritePatternSet &patterns,
                                          fir::FIRToLLVMPassOptions &options);
 
-/// Populate the pattern set with the PreCGRewrite patterns.
-void populatePreCGRewritePatterns(mlir::RewritePatternSet &patterns);
-
 // declarative passes
 #define GEN_PASS_REGISTRATION
 #include "flang/Optimizer/CodeGen/CGPasses.h.inc"

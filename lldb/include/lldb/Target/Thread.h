@@ -74,9 +74,9 @@ public:
     eBroadcastBitThreadSelected = (1 << 4)
   };
 
-  static llvm::StringRef GetStaticBroadcasterClass();
+  static ConstString &GetStaticBroadcasterClass();
 
-  llvm::StringRef GetBroadcasterClass() const override {
+  ConstString &GetBroadcasterClass() const override {
     return GetStaticBroadcasterClass();
   }
 

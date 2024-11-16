@@ -177,7 +177,7 @@ implementation (which is very often glibc).
 
 - Build and Run a specific unit test:
 ```
-  $ ninja libc.test.src.math.<func>_test.__unit__
+  $ ninja libc.test.src.math.<func>_test
   $ projects/libc/test/src/math/libc.test.src.math.<func>_test
 ```
 

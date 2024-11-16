@@ -900,7 +900,7 @@ void ProcessGDBRemote::DidLaunchOrAttach(ArchSpec &process_arch) {
   }
 
   AddressableBits addressable_bits = m_gdb_comm.GetAddressableBits();
-  SetAddressableBitMasks(addressable_bits);
+  addressable_bits.SetProcessMasks(*this);
 
   if (process_arch.IsValid()) {
     const ArchSpec &target_arch = GetTarget().GetArchitecture();
@@ -2337,7 +2337,7 @@ StateType ProcessGDBRemote::SetThreadStopInfo(StringExtractor &stop_packet) {
       }
     }
 
-    SetAddressableBitMasks(addressable_bits);
+    addressable_bits.SetProcessMasks(*this);
 
     ThreadSP thread_sp = SetThreadStopInfo(
         tid, expedited_register_map, signo, thread_name, reason, description,

@@ -12,33 +12,35 @@
 
 # RUN: %{python} %s %{libcxx-dir}/utils
 
-# block Lit from interpreting a RUN/XFAIL/etc inside the generation script
-# END.
-
 import sys
 sys.path.append(sys.argv[1])
 from libcxx.header_information import lit_header_restrictions, public_headers
 
+BLOCKLIT = '' # block Lit from interpreting a RUN/XFAIL/etc inside the generation script
+
 for header in public_headers:
   print(f"""\
 //--- {header}.compile.pass.cpp
-// RUN: %{{cxx}} %s %{{flags}} %{{compile_flags}} -fmodules -fcxx-modules -fmodules-cache-path=%t -fsyntax-only
+// RUN{BLOCKLIT}: %{{cxx}} %s %{{flags}} %{{compile_flags}} -fmodules -fcxx-modules -fmodules-cache-path=%t -fsyntax-only
 
 // GCC doesn't support -fcxx-modules
-// UNSUPPORTED: gcc
+// UNSUPPORTED{BLOCKLIT}: gcc
 
 // The Windows headers don't appear to be compatible with modules
-// UNSUPPORTED: windows
-// UNSUPPORTED: buildhost=windows
+// UNSUPPORTED{BLOCKLIT}: windows
+// UNSUPPORTED{BLOCKLIT}: buildhost=windows
+
+// The AIX headers don't appear to be compatible with modules
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-AIX-FIXME
 
 // The Android headers don't appear to be compatible with modules yet
-// UNSUPPORTED: LIBCXX-ANDROID-FIXME
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-ANDROID-FIXME
 
 // TODO: Investigate this failure
-// UNSUPPORTED: LIBCXX-FREEBSD-FIXME
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-FREEBSD-FIXME
 
 // TODO: Investigate this failure
-// UNSUPPORTED: LIBCXX-PICOLIBC-FIXME
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-PICOLIBC-FIXME
 
 {lit_header_restrictions.get(header, '')}
 
@@ -47,22 +49,25 @@ for header in public_headers:
 
 print(f"""\
 //--- __std_clang_module.compile.pass.mm
-// RUN: %{{cxx}} %s %{{flags}} %{{compile_flags}} -fmodules -fcxx-modules -fmodules-cache-path=%t -fsyntax-only
+// RUN{BLOCKLIT}: %{{cxx}} %s %{{flags}} %{{compile_flags}} -fmodules -fcxx-modules -fmodules-cache-path=%t -fsyntax-only
 
-// REQUIRES: clang-modules-build
+// REQUIRES{BLOCKLIT}: clang-modules-build
 
 // GCC doesn't support -fcxx-modules
-// UNSUPPORTED: gcc
+// UNSUPPORTED{BLOCKLIT}: gcc
 
 // The Windows headers don't appear to be compatible with modules
-// UNSUPPORTED: windows
-// UNSUPPORTED: buildhost=windows
+// UNSUPPORTED{BLOCKLIT}: windows
+// UNSUPPORTED{BLOCKLIT}: buildhost=windows
+
+// The AIX headers don't appear to be compatible with modules
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-AIX-FIXME
 
 // The Android headers don't appear to be compatible with modules yet
-// UNSUPPORTED: LIBCXX-ANDROID-FIXME
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-ANDROID-FIXME
 
 // TODO: Investigate this failure
-// UNSUPPORTED: LIBCXX-FREEBSD-FIXME
+// UNSUPPORTED{BLOCKLIT}: LIBCXX-FREEBSD-FIXME
 
 @import std;
 

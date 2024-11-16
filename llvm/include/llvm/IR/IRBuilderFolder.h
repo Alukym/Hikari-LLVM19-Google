@@ -73,10 +73,6 @@ public:
   virtual Value *FoldCast(Instruction::CastOps Op, Value *V,
                           Type *DestTy) const = 0;
 
-  virtual Value *
-  FoldBinaryIntrinsic(Intrinsic::ID ID, Value *LHS, Value *RHS, Type *Ty,
-                      Instruction *FMFSource = nullptr) const = 0;
-
   //===--------------------------------------------------------------------===//
   // Cast/Conversion Operators
   //===--------------------------------------------------------------------===//

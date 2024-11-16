@@ -92,33 +92,39 @@ createAsmStreamer(MCContext &Ctx, std::unique_ptr<formatted_raw_ostream> OS,
 MCStreamer *createELFStreamer(MCContext &Ctx,
                               std::unique_ptr<MCAsmBackend> &&TAB,
                               std::unique_ptr<MCObjectWriter> &&OW,
-                              std::unique_ptr<MCCodeEmitter> &&CE);
+                              std::unique_ptr<MCCodeEmitter> &&CE,
+                              bool RelaxAll);
 MCStreamer *createGOFFStreamer(MCContext &Ctx,
                                std::unique_ptr<MCAsmBackend> &&TAB,
                                std::unique_ptr<MCObjectWriter> &&OW,
-                               std::unique_ptr<MCCodeEmitter> &&CE);
+                               std::unique_ptr<MCCodeEmitter> &&CE,
+                               bool RelaxAll);
 MCStreamer *createMachOStreamer(MCContext &Ctx,
                                 std::unique_ptr<MCAsmBackend> &&TAB,
                                 std::unique_ptr<MCObjectWriter> &&OW,
                                 std::unique_ptr<MCCodeEmitter> &&CE,
-                                bool DWARFMustBeAtTheEnd,
+                                bool RelaxAll, bool DWARFMustBeAtTheEnd,
                                 bool LabelSections = false);
 MCStreamer *createWasmStreamer(MCContext &Ctx,
                                std::unique_ptr<MCAsmBackend> &&TAB,
                                std::unique_ptr<MCObjectWriter> &&OW,
-                               std::unique_ptr<MCCodeEmitter> &&CE);
+                               std::unique_ptr<MCCodeEmitter> &&CE,
+                               bool RelaxAll);
 MCStreamer *createXCOFFStreamer(MCContext &Ctx,
                                 std::unique_ptr<MCAsmBackend> &&TAB,
                                 std::unique_ptr<MCObjectWriter> &&OW,
-                                std::unique_ptr<MCCodeEmitter> &&CE);
+                                std::unique_ptr<MCCodeEmitter> &&CE,
+                                bool RelaxAll);
 MCStreamer *createSPIRVStreamer(MCContext &Ctx,
                                 std::unique_ptr<MCAsmBackend> &&TAB,
                                 std::unique_ptr<MCObjectWriter> &&OW,
-                                std::unique_ptr<MCCodeEmitter> &&CE);
+                                std::unique_ptr<MCCodeEmitter> &&CE,
+                                bool RelaxAll);
 MCStreamer *createDXContainerStreamer(MCContext &Ctx,
                                       std::unique_ptr<MCAsmBackend> &&TAB,
                                       std::unique_ptr<MCObjectWriter> &&OW,
-                                      std::unique_ptr<MCCodeEmitter> &&CE);
+                                      std::unique_ptr<MCCodeEmitter> &&CE,
+                                      bool RelaxAll);
 
 MCRelocationInfo *createMCRelocationInfo(const Triple &TT, MCContext &Ctx);
 
@@ -193,42 +199,42 @@ public:
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using GOFFStreamerCtorTy =
       MCStreamer *(*)(MCContext &Ctx, std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using MachOStreamerCtorTy =
       MCStreamer *(*)(MCContext &Ctx, std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll,
                       bool DWARFMustBeAtTheEnd);
   using COFFStreamerCtorTy =
       MCStreamer *(*)(MCContext &Ctx, std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll,
                       bool IncrementalLinkerCompatible);
   using WasmStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using XCOFFStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using SPIRVStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
-
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+  
   using DXContainerStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter);
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
 
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
   using AsmTargetStreamerCtorTy = MCTargetStreamer *(*)(
@@ -560,7 +566,7 @@ public:
                                      std::unique_ptr<MCAsmBackend> &&TAB,
                                      std::unique_ptr<MCObjectWriter> &&OW,
                                      std::unique_ptr<MCCodeEmitter> &&Emitter,
-                                     const MCSubtargetInfo &STI, bool,
+                                     const MCSubtargetInfo &STI, bool RelaxAll,
                                      bool IncrementalLinkerCompatible,
                                      bool DWARFMustBeAtTheEnd) const {
     MCStreamer *S = nullptr;
@@ -571,63 +577,66 @@ public:
       assert((T.isOSWindows() || T.isUEFI()) &&
              "only Windows and UEFI COFF are supported");
       S = COFFStreamerCtorFn(Ctx, std::move(TAB), std::move(OW),
-                             std::move(Emitter), IncrementalLinkerCompatible);
+                             std::move(Emitter), RelaxAll,
+                             IncrementalLinkerCompatible);
       break;
     case Triple::MachO:
       if (MachOStreamerCtorFn)
         S = MachOStreamerCtorFn(Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter), DWARFMustBeAtTheEnd);
+                                std::move(Emitter), RelaxAll,
+                                DWARFMustBeAtTheEnd);
       else
         S = createMachOStreamer(Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter), DWARFMustBeAtTheEnd);
+                                std::move(Emitter), RelaxAll,
+                                DWARFMustBeAtTheEnd);
       break;
     case Triple::ELF:
       if (ELFStreamerCtorFn)
         S = ELFStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                              std::move(Emitter));
+                              std::move(Emitter), RelaxAll);
       else
         S = createELFStreamer(Ctx, std::move(TAB), std::move(OW),
-                              std::move(Emitter));
+                              std::move(Emitter), RelaxAll);
       break;
     case Triple::Wasm:
       if (WasmStreamerCtorFn)
         S = WasmStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                               std::move(Emitter));
+                               std::move(Emitter), RelaxAll);
       else
         S = createWasmStreamer(Ctx, std::move(TAB), std::move(OW),
-                               std::move(Emitter));
+                               std::move(Emitter), RelaxAll);
       break;
     case Triple::GOFF:
       if (GOFFStreamerCtorFn)
         S = GOFFStreamerCtorFn(Ctx, std::move(TAB), std::move(OW),
-                               std::move(Emitter));
+                               std::move(Emitter), RelaxAll);
       else
         S = createGOFFStreamer(Ctx, std::move(TAB), std::move(OW),
-                               std::move(Emitter));
+                               std::move(Emitter), RelaxAll);
       break;
     case Triple::XCOFF:
       if (XCOFFStreamerCtorFn)
         S = XCOFFStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter));
+                                std::move(Emitter), RelaxAll);
       else
         S = createXCOFFStreamer(Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter));
+                                std::move(Emitter), RelaxAll);
       break;
     case Triple::SPIRV:
       if (SPIRVStreamerCtorFn)
         S = SPIRVStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter));
+                                std::move(Emitter), RelaxAll);
       else
         S = createSPIRVStreamer(Ctx, std::move(TAB), std::move(OW),
-                                std::move(Emitter));
+                                std::move(Emitter), RelaxAll);
       break;
     case Triple::DXContainer:
       if (DXContainerStreamerCtorFn)
         S = DXContainerStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                                      std::move(Emitter));
+                              std::move(Emitter), RelaxAll);
       else
         S = createDXContainerStreamer(Ctx, std::move(TAB), std::move(OW),
-                                      std::move(Emitter));
+                                      std::move(Emitter), RelaxAll);
       break;
     }
     if (ObjectTargetStreamerCtorFn)

@@ -48,12 +48,11 @@ int main(int, char**) {
     // Test with an overaligned type
     {
         new_called = delete_called = 0;
-        OverAligned* dummy_data_block = new OverAligned[3];
-        OverAligned* x                = DoNotOptimize(dummy_data_block);
+        OverAligned* x = new OverAligned[3];
         assert(static_cast<void*>(x) == DummyData);
         assert(new_called == 1);
 
-        delete[] dummy_data_block;
+        delete[] x;
         assert(delete_called == 1);
     }
 

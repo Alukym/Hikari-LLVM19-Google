@@ -42,7 +42,6 @@ static const OmpDirectiveSet noWaitClauseNotAllowedSet{
     Directive::OMPD_do_simd,
     Directive::OMPD_sections,
     Directive::OMPD_single,
-    Directive::OMPD_workshare,
 };
 } // namespace omp
 } // namespace llvm
@@ -163,8 +162,8 @@ private:
   void CheckDependArraySection(
       const common::Indirection<parser::ArrayElement> &, const parser::Name &);
   bool IsDataRefTypeParamInquiry(const parser::DataRef *dataRef);
-  void CheckIsVarPartOfAnotherVar(const parser::CharBlock &source,
-      const parser::OmpObjectList &objList, llvm::StringRef clause = "");
+  void CheckIsVarPartOfAnotherVar(
+      const parser::CharBlock &source, const parser::OmpObjectList &objList);
   void CheckThreadprivateOrDeclareTargetVar(
       const parser::OmpObjectList &objList);
   void CheckSymbolNames(

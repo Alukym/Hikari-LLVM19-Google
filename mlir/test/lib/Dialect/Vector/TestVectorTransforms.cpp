@@ -489,9 +489,7 @@ struct TestFlattenVectorTransferPatterns
   Option<unsigned> targetVectorBitwidth{
       *this, "target-vector-bitwidth",
       llvm::cl::desc(
-          "Minimum vector bitwidth to enable the flattening transformation. "
-          "For scalable vectors this is the base size, i.e. the size "
-          "corresponding to vscale=1."),
+          "Minimum vector bitwidth to enable the flattening transformation"),
       llvm::cl::init(std::numeric_limits<unsigned>::max())};
 
   void runOnOperation() override {
@@ -866,8 +864,6 @@ struct TestVectorLinearize final
     ConversionTarget target(*context);
 
     vector::populateVectorLinearizeTypeConversionsAndLegality(
-        typeConverter, patterns, target, targetVectorBitwidth);
-    vector::populateVectorLinearizeShuffleLikeOpsPatterns(
         typeConverter, patterns, target, targetVectorBitwidth);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))

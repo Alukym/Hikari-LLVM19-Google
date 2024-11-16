@@ -274,15 +274,16 @@ translateDataLayout(DataLayoutSpecInterface attribute,
                 layoutStream << ":" << preferred;
               return success();
             })
-            .Case([&](LLVMPointerType type) {
-              layoutStream << "p" << type.getAddressSpace() << ":";
+            .Case([&](LLVMPointerType ptrType) {
+              layoutStream << "p" << ptrType.getAddressSpace() << ":";
               uint64_t size = dataLayout.getTypeSizeInBits(type);
               uint64_t abi = dataLayout.getTypeABIAlignment(type) * 8u;
               uint64_t preferred =
                   dataLayout.getTypePreferredAlignment(type) * 8u;
-              uint64_t index = *dataLayout.getTypeIndexBitwidth(type);
-              layoutStream << size << ":" << abi << ":" << preferred << ":"
-                           << index;
+              layoutStream << size << ":" << abi << ":" << preferred;
+              if (std::optional<uint64_t> index = extractPointerSpecValue(
+                      entry.getValue(), PtrDLEntryPos::Index))
+                layoutStream << ":" << *index;
               return success();
             })
             .Default([loc](Type type) {
@@ -715,8 +716,6 @@ void ModuleTranslation::forgetMapping(Region &region) {
           branchMapping.erase(&op);
         if (isa<LLVM::GlobalOp>(op))
           globalsMapping.erase(&op);
-        if (isa<LLVM::CallOp>(op))
-          callMapping.erase(&op);
         llvm::append_range(
             toProcess,
             llvm::map_range(op.getRegions(), [](Region &r) { return &r; }));
@@ -1719,16 +1718,6 @@ ModuleTranslation::translateGlobalVariableExpression(
 
 llvm::Metadata *ModuleTranslation::translateDebugInfo(LLVM::DINodeAttr attr) {
   return debugTranslation->translate(attr);
-}
-
-llvm::RoundingMode
-ModuleTranslation::translateRoundingMode(LLVM::RoundingMode rounding) {
-  return convertRoundingModeToLLVM(rounding);
-}
-
-llvm::fp::ExceptionBehavior ModuleTranslation::translateFPExceptionBehavior(
-    LLVM::FPExceptionBehavior exceptionBehavior) {
-  return convertFPExceptionBehaviorToLLVM(exceptionBehavior);
 }
 
 llvm::NamedMDNode *

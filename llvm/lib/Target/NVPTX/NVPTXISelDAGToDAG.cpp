@@ -30,10 +30,6 @@ using namespace llvm;
 #define DEBUG_TYPE "nvptx-isel"
 #define PASS_NAME "NVPTX DAG->DAG Pattern Instruction Selection"
 
-static cl::opt<bool>
-    EnableRsqrtOpt("nvptx-rsqrt-approx-opt", cl::init(true), cl::Hidden,
-                   cl::desc("Enable reciprocal sqrt optimization"));
-
 /// createNVPTXISelDag - This pass converts a legalized DAG into a
 /// NVPTX-specific DAG, ready for instruction scheduling.
 FunctionPass *llvm::createNVPTXISelDag(NVPTXTargetMachine &TM,
@@ -78,7 +74,9 @@ bool NVPTXDAGToDAGISel::allowUnsafeFPMath() const {
   return TL->allowUnsafeFPMath(*MF);
 }
 
-bool NVPTXDAGToDAGISel::doRsqrtOpt() const { return EnableRsqrtOpt; }
+bool NVPTXDAGToDAGISel::useShortPointers() const {
+  return TM.useShortPointers();
+}
 
 /// Select - Select instructions not customized! Used for
 /// expanded, promoted and normal instructions.
@@ -770,25 +768,22 @@ void NVPTXDAGToDAGISel::SelectAddrSpaceCast(SDNode *N) {
     switch (SrcAddrSpace) {
     default: report_fatal_error("Bad address space in addrspacecast");
     case ADDRESS_SPACE_GLOBAL:
-      Opc = TM.is64Bit() ? NVPTX::cvta_global_64 : NVPTX::cvta_global;
+      Opc = TM.is64Bit() ? NVPTX::cvta_global_yes_64 : NVPTX::cvta_global_yes;
       break;
     case ADDRESS_SPACE_SHARED:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(SrcAddrSpace) == 32
-                                ? NVPTX::cvta_shared_6432
-                                : NVPTX::cvta_shared_64)
-                         : NVPTX::cvta_shared;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_shared_yes_6432
+                                               : NVPTX::cvta_shared_yes_64)
+                         : NVPTX::cvta_shared_yes;
       break;
     case ADDRESS_SPACE_CONST:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(SrcAddrSpace) == 32
-                                ? NVPTX::cvta_const_6432
-                                : NVPTX::cvta_const_64)
-                         : NVPTX::cvta_const;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_const_yes_6432
+                                               : NVPTX::cvta_const_yes_64)
+                         : NVPTX::cvta_const_yes;
       break;
     case ADDRESS_SPACE_LOCAL:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(SrcAddrSpace) == 32
-                                ? NVPTX::cvta_local_6432
-                                : NVPTX::cvta_local_64)
-                         : NVPTX::cvta_local;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_local_yes_6432
+                                               : NVPTX::cvta_local_yes_64)
+                         : NVPTX::cvta_local_yes;
       break;
     }
     ReplaceNode(N, CurDAG->getMachineNode(Opc, SDLoc(N), N->getValueType(0),
@@ -802,25 +797,23 @@ void NVPTXDAGToDAGISel::SelectAddrSpaceCast(SDNode *N) {
     switch (DstAddrSpace) {
     default: report_fatal_error("Bad address space in addrspacecast");
     case ADDRESS_SPACE_GLOBAL:
-      Opc = TM.is64Bit() ? NVPTX::cvta_to_global_64 : NVPTX::cvta_to_global;
+      Opc = TM.is64Bit() ? NVPTX::cvta_to_global_yes_64
+                         : NVPTX::cvta_to_global_yes;
       break;
     case ADDRESS_SPACE_SHARED:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(DstAddrSpace) == 32
-                                ? NVPTX::cvta_to_shared_3264
-                                : NVPTX::cvta_to_shared_64)
-                         : NVPTX::cvta_to_shared;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_to_shared_yes_3264
+                                                : NVPTX::cvta_to_shared_yes_64)
+                         : NVPTX::cvta_to_shared_yes;
       break;
     case ADDRESS_SPACE_CONST:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(DstAddrSpace) == 32
-                                ? NVPTX::cvta_to_const_3264
-                                : NVPTX::cvta_to_const_64)
-                         : NVPTX::cvta_to_const;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_to_const_yes_3264
+                                             : NVPTX::cvta_to_const_yes_64)
+                         : NVPTX::cvta_to_const_yes;
       break;
     case ADDRESS_SPACE_LOCAL:
-      Opc = TM.is64Bit() ? (TM.getPointerSizeInBits(DstAddrSpace) == 32
-                                ? NVPTX::cvta_to_local_3264
-                                : NVPTX::cvta_to_local_64)
-                         : NVPTX::cvta_to_local;
+      Opc = TM.is64Bit() ? (useShortPointers() ? NVPTX::cvta_to_local_yes_3264
+                                               : NVPTX::cvta_to_local_yes_64)
+                         : NVPTX::cvta_to_local_yes;
       break;
     case ADDRESS_SPACE_PARAM:
       Opc = TM.is64Bit() ? NVPTX::nvvm_ptr_gen_to_param_64

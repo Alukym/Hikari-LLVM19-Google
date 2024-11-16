@@ -18,7 +18,6 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/SimplifyCFGOptions.h"
-#include "llvm/Transforms/Utils/ValueMapper.h"
 #include <cstdint>
 
 namespace llvm {
@@ -263,21 +262,21 @@ CallInst *changeToCall(InvokeInst *II, DomTreeUpdater *DTU = nullptr);
 /// that has an associated llvm.dbg.declare intrinsic.
 void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      StoreInst *SI, DIBuilder &Builder);
-void ConvertDebugDeclareToDebugValue(DbgVariableRecord *DVR, StoreInst *SI,
+void ConvertDebugDeclareToDebugValue(DPValue *DPV, StoreInst *SI,
                                      DIBuilder &Builder);
 
 /// Inserts a llvm.dbg.value intrinsic before a load of an alloca'd value
 /// that has an associated llvm.dbg.declare intrinsic.
 void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      LoadInst *LI, DIBuilder &Builder);
-void ConvertDebugDeclareToDebugValue(DbgVariableRecord *DVR, LoadInst *LI,
+void ConvertDebugDeclareToDebugValue(DPValue *DPV, LoadInst *LI,
                                      DIBuilder &Builder);
 
 /// Inserts a llvm.dbg.value intrinsic after a phi that has an associated
 /// llvm.dbg.declare intrinsic.
 void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      PHINode *LI, DIBuilder &Builder);
-void ConvertDebugDeclareToDebugValue(DbgVariableRecord *DVR, PHINode *LI,
+void ConvertDebugDeclareToDebugValue(DPValue *DPV, PHINode *LI,
                                      DIBuilder &Builder);
 
 /// Lowers llvm.dbg.declare intrinsics into appropriate set of
@@ -314,7 +313,7 @@ void salvageDebugInfo(Instruction &I);
 /// Mark undef if salvaging cannot be completed.
 void salvageDebugInfoForDbgValues(Instruction &I,
                                   ArrayRef<DbgVariableIntrinsic *> Insns,
-                                  ArrayRef<DbgVariableRecord *> DPInsns);
+                                  ArrayRef<DPValue *> DPInsns);
 
 /// Given an instruction \p I and DIExpression \p DIExpr operating on
 /// it, append the effects of \p I to the DIExpression operand list
@@ -440,18 +439,6 @@ unsigned replaceDominatedUsesWith(Value *From, Value *To, DominatorTree &DT,
 /// the end of the given BasicBlock. Returns the number of replacements made.
 unsigned replaceDominatedUsesWith(Value *From, Value *To, DominatorTree &DT,
                                   const BasicBlock *BB);
-/// Replace each use of 'From' with 'To' if that use is dominated by
-/// the given edge and the callback ShouldReplace returns true. Returns the
-/// number of replacements made.
-unsigned replaceDominatedUsesWithIf(
-    Value *From, Value *To, DominatorTree &DT, const BasicBlockEdge &Edge,
-    function_ref<bool(const Use &U, const Value *To)> ShouldReplace);
-/// Replace each use of 'From' with 'To' if that use is dominated by
-/// the end of the given BasicBlock and the callback ShouldReplace returns true.
-/// Returns the number of replacements made.
-unsigned replaceDominatedUsesWithIf(
-    Value *From, Value *To, DominatorTree &DT, const BasicBlock *BB,
-    function_ref<bool(const Use &U, const Value *To)> ShouldReplace);
 
 /// Return true if this call calls a gc leaf function.
 ///
@@ -490,10 +477,6 @@ void hoistAllInstructionsInto(BasicBlock *DomBlock, Instruction *InsertPt,
 /// Given a constant, create a debug information expression.
 DIExpression *getExpressionForConstant(DIBuilder &DIB, const Constant &C,
                                        Type &Ty);
-
-/// Remap the operands of the debug records attached to \p Inst, and the
-/// operands of \p Inst itself if it's a debug intrinsic.
-void remapDebugVariable(ValueToValueMapTy &Mapping, Instruction *Inst);
 
 //===----------------------------------------------------------------------===//
 //  Intrinsic pattern matching

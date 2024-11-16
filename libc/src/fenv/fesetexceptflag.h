@@ -9,7 +9,7 @@
 #ifndef LLVM_LIBC_SRC_FENV_FESETEXCEPTFLAG_H
 #define LLVM_LIBC_SRC_FENV_FESETEXCEPTFLAG_H
 
-#include "hdr/types/fexcept_t.h"
+#include <fenv.h>
 
 namespace LIBC_NAMESPACE {
 

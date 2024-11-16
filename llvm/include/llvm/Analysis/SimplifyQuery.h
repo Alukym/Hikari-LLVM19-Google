@@ -9,7 +9,7 @@
 #ifndef LLVM_ANALYSIS_SIMPLIFYQUERY_H
 #define LLVM_ANALYSIS_SIMPLIFYQUERY_H
 
-#include "llvm/IR/Operator.h"
+#include "llvm/IR/PatternMatch.h"
 
 namespace llvm {
 
@@ -106,12 +106,12 @@ struct SimplifyQuery {
 
   /// If CanUseUndef is true, returns whether \p V is undef.
   /// Otherwise always return false.
-  bool isUndefValue(Value *V) const;
+  bool isUndefValue(Value *V) const {
+    if (!CanUseUndef)
+      return false;
 
-  SimplifyQuery getWithoutDomCondCache() const {
-    SimplifyQuery Copy(*this);
-    Copy.DC = nullptr;
-    return Copy;
+    using namespace PatternMatch;
+    return match(V, m_Undef());
   }
 };
 

@@ -484,17 +484,13 @@ void MachineFunction::deleteMachineBasicBlock(MachineBasicBlock *MBB) {
 }
 
 MachineMemOperand *MachineFunction::getMachineMemOperand(
-    MachinePointerInfo PtrInfo, MachineMemOperand::Flags F, LocationSize Size,
-    Align BaseAlignment, const AAMDNodes &AAInfo, const MDNode *Ranges,
+    MachinePointerInfo PtrInfo, MachineMemOperand::Flags f, uint64_t s,
+    Align base_alignment, const AAMDNodes &AAInfo, const MDNode *Ranges,
     SyncScope::ID SSID, AtomicOrdering Ordering,
     AtomicOrdering FailureOrdering) {
-  assert((!Size.hasValue() ||
-          Size.getValue().getKnownMinValue() != ~UINT64_C(0)) &&
-         "Unexpected an unknown size to be represented using "
-         "LocationSize::beforeOrAfter()");
   return new (Allocator)
-      MachineMemOperand(PtrInfo, F, Size, BaseAlignment, AAInfo, Ranges, SSID,
-                        Ordering, FailureOrdering);
+      MachineMemOperand(PtrInfo, f, s, base_alignment, AAInfo, Ranges,
+                        SSID, Ordering, FailureOrdering);
 }
 
 MachineMemOperand *MachineFunction::getMachineMemOperand(
@@ -507,14 +503,8 @@ MachineMemOperand *MachineFunction::getMachineMemOperand(
                         Ordering, FailureOrdering);
 }
 
-MachineMemOperand *
-MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
-                                      const MachinePointerInfo &PtrInfo,
-                                      LocationSize Size) {
-  assert((!Size.hasValue() ||
-          Size.getValue().getKnownMinValue() != ~UINT64_C(0)) &&
-         "Unexpected an unknown size to be represented using "
-         "LocationSize::beforeOrAfter()");
+MachineMemOperand *MachineFunction::getMachineMemOperand(
+    const MachineMemOperand *MMO, const MachinePointerInfo &PtrInfo, uint64_t Size) {
   return new (Allocator)
       MachineMemOperand(PtrInfo, MMO->getFlags(), Size, MMO->getBaseAlign(),
                         AAMDNodes(), nullptr, MMO->getSyncScopeID(),
@@ -573,10 +563,10 @@ MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
 MachineInstr::ExtraInfo *MachineFunction::createMIExtraInfo(
     ArrayRef<MachineMemOperand *> MMOs, MCSymbol *PreInstrSymbol,
     MCSymbol *PostInstrSymbol, MDNode *HeapAllocMarker, MDNode *PCSections,
-    uint32_t CFIType, MDNode *MMRAs) {
+    uint32_t CFIType) {
   return MachineInstr::ExtraInfo::create(Allocator, MMOs, PreInstrSymbol,
                                          PostInstrSymbol, HeapAllocMarker,
-                                         PCSections, CFIType, MMRAs);
+                                         PCSections, CFIType);
 }
 
 const char *MachineFunction::createExternalSymbolName(StringRef Name) {

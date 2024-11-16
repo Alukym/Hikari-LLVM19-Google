@@ -258,7 +258,7 @@ void LiveVariables::HandlePhysRegUse(Register Reg, MachineInstr &MI) {
       }
     }
   } else if (LastDef && !PhysRegUse[Reg] &&
-             !LastDef->findRegisterDefOperand(Reg, /*TRI=*/nullptr))
+             !LastDef->findRegisterDefOperand(Reg))
     // Last def defines the super register, add an implicit def of reg.
     LastDef->addOperand(MachineOperand::CreateReg(Reg, true/*IsDef*/,
                                                   true/*IsImp*/));
@@ -361,8 +361,7 @@ bool LiveVariables::HandlePhysRegKill(Register Reg, MachineInstr *MI) {
         continue;
       bool NeedDef = true;
       if (PhysRegDef[Reg] == PhysRegDef[SubReg]) {
-        MachineOperand *MO =
-            PhysRegDef[Reg]->findRegisterDefOperand(SubReg, /*TRI=*/nullptr);
+        MachineOperand *MO = PhysRegDef[Reg]->findRegisterDefOperand(SubReg);
         if (MO) {
           NeedDef = false;
           assert(!MO->isDead());
@@ -389,7 +388,7 @@ bool LiveVariables::HandlePhysRegKill(Register Reg, MachineInstr *MI) {
                                                 true/*IsImp*/, true/*IsKill*/));
     else {
       MachineOperand *MO =
-          LastRefOrPartRef->findRegisterDefOperand(Reg, TRI, false, false);
+        LastRefOrPartRef->findRegisterDefOperand(Reg, false, false, TRI);
       bool NeedEC = MO->isEarlyClobber() && MO->getReg() != Reg;
       // If the last reference is the last def, then it's not used at all.
       // That is, unless we are currently processing the last reference itself.
@@ -397,7 +396,7 @@ bool LiveVariables::HandlePhysRegKill(Register Reg, MachineInstr *MI) {
       if (NeedEC) {
         // If we are adding a subreg def and the superreg def is marked early
         // clobber, add an early clobber marker to the subreg def.
-        MO = LastRefOrPartRef->findRegisterDefOperand(Reg, /*TRI=*/nullptr);
+        MO = LastRefOrPartRef->findRegisterDefOperand(Reg);
         if (MO)
           MO->setIsEarlyClobber();
       }
@@ -728,7 +727,7 @@ void LiveVariables::recomputeForSingleDefVirtReg(Register Reg) {
       if (MI.isPHI())
         break;
       if (MI.readsVirtualRegister(Reg)) {
-        assert(!MI.killsRegister(Reg, /*TRI=*/nullptr));
+        assert(!MI.killsRegister(Reg));
         MI.addRegisterKilled(Reg, nullptr);
         VI.Kills.push_back(&MI);
         break;

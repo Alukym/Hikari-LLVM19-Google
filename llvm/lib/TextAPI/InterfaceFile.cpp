@@ -54,7 +54,7 @@ void InterfaceFile::addParentUmbrella(const Target &Target_, StringRef Parent) {
   ParentUmbrellas.emplace(Iter, Target_, std::string(Parent));
 }
 
-void InterfaceFile::addRPath(StringRef RPath, const Target &InputTarget) {
+void InterfaceFile::addRPath(const Target &InputTarget, StringRef RPath) {
   if (RPath.empty())
     return;
   using RPathEntryT = const std::pair<Target, std::string>;
@@ -198,9 +198,9 @@ InterfaceFile::merge(const InterfaceFile *O) const {
       IF->addReexportedLibrary(Lib.getInstallName(), Target);
 
   for (const auto &[Target, Path] : rpaths())
-    IF->addRPath(Path, Target);
+    IF->addRPath(Target, Path);
   for (const auto &[Target, Path] : O->rpaths())
-    IF->addRPath(Path, Target);
+    IF->addRPath(Target, Path);
 
   for (const auto *Sym : symbols()) {
     IF->addSymbol(Sym->getKind(), Sym->getName(), Sym->targets(),
@@ -319,7 +319,7 @@ InterfaceFile::extract(Architecture Arch) const {
 
   for (const auto &It : rpaths())
     if (It.first.Arch == Arch)
-      IF->addRPath(It.second, It.first);
+      IF->addRPath(It.first, It.second);
 
   for (const auto &Lib : allowableClients())
     for (const auto &Target : Lib.targets())

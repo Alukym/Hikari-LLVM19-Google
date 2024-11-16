@@ -487,14 +487,6 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         Add &= ~NotAllowedWithExecuteOnly;
       if (CfiCrossDso)
         Add &= ~SanitizerKind::CFIMFCall;
-      // -fsanitize=undefined does not expand to signed-integer-overflow in
-      // -fwrapv (implied by -fno-strict-overflow) mode.
-      if (Add & SanitizerKind::UndefinedGroup) {
-        bool S = Args.hasFlagNoClaim(options::OPT_fno_strict_overflow,
-                                     options::OPT_fstrict_overflow, false);
-        if (Args.hasFlagNoClaim(options::OPT_fwrapv, options::OPT_fno_wrapv, S))
-          Add &= ~SanitizerKind::SignedIntegerOverflow;
-      }
       Add &= Supported;
 
       if (Add & SanitizerKind::Fuzzer)
@@ -797,8 +789,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         Arg->claim();
         if (LegacySanitizeCoverage != 0 && DiagnoseErrors) {
           D.Diag(diag::warn_drv_deprecated_arg)
-              << Arg->getAsString(Args) << /*hasReplacement=*/true
-              << "-fsanitize-coverage=trace-pc-guard";
+              << Arg->getAsString(Args) << "-fsanitize-coverage=trace-pc-guard";
         }
         continue;
       }
@@ -834,11 +825,11 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     // enabled.
     if (CoverageFeatures & CoverageTraceBB)
       D.Diag(clang::diag::warn_drv_deprecated_arg)
-          << "-fsanitize-coverage=trace-bb" << /*hasReplacement=*/true
+          << "-fsanitize-coverage=trace-bb"
           << "-fsanitize-coverage=trace-pc-guard";
     if (CoverageFeatures & Coverage8bitCounters)
       D.Diag(clang::diag::warn_drv_deprecated_arg)
-          << "-fsanitize-coverage=8bit-counters" << /*hasReplacement=*/true
+          << "-fsanitize-coverage=8bit-counters"
           << "-fsanitize-coverage=trace-pc-guard";
   }
 
@@ -850,7 +841,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   if ((CoverageFeatures & InsertionPointTypes) &&
       !(CoverageFeatures & InstrumentationTypes) && DiagnoseErrors) {
     D.Diag(clang::diag::warn_drv_deprecated_arg)
-        << "-fsanitize-coverage=[func|bb|edge]" << /*hasReplacement=*/true
+        << "-fsanitize-coverage=[func|bb|edge]"
         << "-fsanitize-coverage=[func|bb|edge],[trace-pc-guard|trace-pc],["
            "control-flow]";
   }
@@ -1193,9 +1184,7 @@ void SanitizerArgs::addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
                           BinaryMetadataIgnorelistFiles);
   }
 
-  if (TC.getTriple().isOSWindows() && needsUbsanRt() &&
-      Args.hasFlag(options::OPT_frtlib_defaultlib,
-                   options::OPT_fno_rtlib_defaultlib, true)) {
+  if (TC.getTriple().isOSWindows() && needsUbsanRt()) {
     // Instruct the code generator to embed linker directives in the object file
     // that cause the required runtime libraries to be linked.
     CmdArgs.push_back(
@@ -1206,9 +1195,7 @@ void SanitizerArgs::addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
           "--dependent-lib=" +
           TC.getCompilerRTBasename(Args, "ubsan_standalone_cxx")));
   }
-  if (TC.getTriple().isOSWindows() && needsStatsRt() &&
-      Args.hasFlag(options::OPT_frtlib_defaultlib,
-                   options::OPT_fno_rtlib_defaultlib, true)) {
+  if (TC.getTriple().isOSWindows() && needsStatsRt()) {
     CmdArgs.push_back(Args.MakeArgString(
         "--dependent-lib=" + TC.getCompilerRTBasename(Args, "stats_client")));
 

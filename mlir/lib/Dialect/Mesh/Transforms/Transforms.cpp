@@ -133,7 +133,7 @@ struct AllSliceOpLowering
 
     // insert tensor.extract_slice
     RankedTensorType operandType =
-        cast<RankedTensorType>(op.getOperand().getType());
+        op.getOperand().getType().cast<RankedTensorType>();
     SmallVector<OpFoldResult> sizes;
     for (int64_t i = 0; i < operandType.getRank(); ++i) {
       if (i == sliceAxis) {
@@ -202,9 +202,10 @@ createCollectiveProcessGroupSize(MeshOp mesh, ArrayRef<MeshAxis> axes,
                                  ImplicitLocOpBuilder &builder) {
   Operation::result_range meshShape =
       builder.create<mesh::MeshShapeOp>(mesh, axes).getResults();
-  return cast<TypedValue<IndexType>>(arith::createProduct(
-      builder, builder.getLoc(), llvm::to_vector_of<Value>(meshShape),
-      builder.getIndexType()));
+  return arith::createProduct(builder, builder.getLoc(),
+                              llvm::to_vector_of<Value>(meshShape),
+                              builder.getIndexType())
+      .cast<TypedValue<IndexType>>();
 }
 
 TypedValue<IndexType> createProcessLinearIndex(StringRef mesh,

@@ -432,13 +432,9 @@ public:
             DestTy.isVector() ? CastSrcTy.getNumElements() / NumDefs : 1;
         LLT UnmergeTy = CastSrcTy.changeElementCount(
             ElementCount::getFixed(UnmergeNumElts));
-        LLT SrcWideTy =
-            SrcTy.changeElementCount(ElementCount::getFixed(UnmergeNumElts));
 
         if (isInstUnsupported(
-                {TargetOpcode::G_UNMERGE_VALUES, {UnmergeTy, CastSrcTy}}) ||
-            LI.getAction({TargetOpcode::G_TRUNC, {SrcWideTy, UnmergeTy}})
-                    .Action == LegalizeActions::MoreElements)
+                {TargetOpcode::G_UNMERGE_VALUES, {UnmergeTy, CastSrcTy}}))
           return false;
 
         Builder.setInstr(MI);
@@ -906,8 +902,7 @@ public:
                                         unsigned &DefOperandIdx) {
       if (Register Def = findValueFromDefImpl(Reg, 0, Size)) {
         if (auto *Unmerge = dyn_cast<GUnmerge>(MRI.getVRegDef(Def))) {
-          DefOperandIdx =
-              Unmerge->findRegisterDefOperandIdx(Def, /*TRI=*/nullptr);
+          DefOperandIdx = Unmerge->findRegisterDefOperandIdx(Def);
           return Unmerge;
         }
       }

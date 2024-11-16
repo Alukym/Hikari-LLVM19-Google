@@ -15,23 +15,20 @@
 using namespace clang;
 
 OpenACCComputeConstruct *
-OpenACCComputeConstruct::CreateEmpty(const ASTContext &C, unsigned NumClauses) {
-  void *Mem = C.Allocate(
-      OpenACCComputeConstruct::totalSizeToAlloc<const OpenACCClause *>(
-          NumClauses));
-  auto *Inst = new (Mem) OpenACCComputeConstruct(NumClauses);
+OpenACCComputeConstruct::CreateEmpty(const ASTContext &C, EmptyShell) {
+  void *Mem = C.Allocate(sizeof(OpenACCComputeConstruct),
+                         alignof(OpenACCComputeConstruct));
+  auto *Inst = new (Mem) OpenACCComputeConstruct;
   return Inst;
 }
 
 OpenACCComputeConstruct *
 OpenACCComputeConstruct::Create(const ASTContext &C, OpenACCDirectiveKind K,
                                 SourceLocation BeginLoc, SourceLocation EndLoc,
-                                ArrayRef<const OpenACCClause *> Clauses,
                                 Stmt *StructuredBlock) {
-  void *Mem = C.Allocate(
-      OpenACCComputeConstruct::totalSizeToAlloc<const OpenACCClause *>(
-          Clauses.size()));
-  auto *Inst = new (Mem)
-      OpenACCComputeConstruct(K, BeginLoc, EndLoc, Clauses, StructuredBlock);
+  void *Mem = C.Allocate(sizeof(OpenACCComputeConstruct),
+                         alignof(OpenACCComputeConstruct));
+  auto *Inst =
+      new (Mem) OpenACCComputeConstruct(K, BeginLoc, EndLoc, StructuredBlock);
   return Inst;
 }

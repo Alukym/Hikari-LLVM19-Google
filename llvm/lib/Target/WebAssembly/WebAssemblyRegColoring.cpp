@@ -129,7 +129,7 @@ buildVRegToDbgValueMap(MachineFunction &MF, const LiveIntervals *Liveness) {
 // changes.
 static void undefInvalidDbgValues(
     const LiveIntervals *Liveness,
-    ArrayRef<SmallVector<LiveInterval *, 4>> Assignments,
+    const ArrayRef<SmallVector<LiveInterval *, 4>> &Assignments,
     DenseMap<Register, std::vector<std::pair<SlotIndex, MachineInstr *>>>
         &DbgVRegToValues) {
 #ifndef NDEBUG

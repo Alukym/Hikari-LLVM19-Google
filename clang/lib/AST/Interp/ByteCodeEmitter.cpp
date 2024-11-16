@@ -82,13 +82,11 @@ Function *ByteCodeEmitter::compileFunc(const FunctionDecl *FuncDecl) {
   // InterpStack when calling the function.
   bool HasThisPointer = false;
   if (const auto *MD = dyn_cast<CXXMethodDecl>(FuncDecl)) {
-    if (!IsLambdaStaticInvoker) {
-      HasThisPointer = MD->isInstance();
-      if (MD->isImplicitObjectMemberFunction()) {
-        ParamTypes.push_back(PT_Ptr);
-        ParamOffsets.push_back(ParamOffset);
-        ParamOffset += align(primSize(PT_Ptr));
-      }
+    if (MD->isImplicitObjectMemberFunction() && !IsLambdaStaticInvoker) {
+      HasThisPointer = true;
+      ParamTypes.push_back(PT_Ptr);
+      ParamOffsets.push_back(ParamOffset);
+      ParamOffset += align(primSize(PT_Ptr));
     }
 
     // Set up lambda capture to closure record field mapping.

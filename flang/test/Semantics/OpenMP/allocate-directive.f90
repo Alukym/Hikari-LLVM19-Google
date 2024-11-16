@@ -1,5 +1,3 @@
-! REQUIRES: openmp_runtime
-
 ! RUN: %python %S/../test_errors.py %s %flang_fc1 -fopenmp
 ! Check OpenMP Allocate directive
 use omp_lib

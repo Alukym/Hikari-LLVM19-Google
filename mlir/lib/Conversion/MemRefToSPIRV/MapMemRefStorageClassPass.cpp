@@ -272,16 +272,14 @@ public:
       const spirv::MemorySpaceToStorageClassMap &memorySpaceMap)
       : memorySpaceMap(memorySpaceMap) {}
 
-  LogicalResult initializeOptions(
-      StringRef options,
-      function_ref<LogicalResult(const Twine &)> errorHandler) override {
-    if (failed(Pass::initializeOptions(options, errorHandler)))
+  LogicalResult initializeOptions(StringRef options) override {
+    if (failed(Pass::initializeOptions(options)))
       return failure();
 
     if (clientAPI == "opencl")
       memorySpaceMap = spirv::mapMemorySpaceToOpenCLStorageClass;
     else if (clientAPI != "vulkan")
-      return errorHandler(llvm::Twine("Invalid clienAPI: ") + clientAPI);
+      return failure();
 
     return success();
   }

@@ -11,7 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "TestDialect.h"
-#include "TestOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -62,7 +61,7 @@ LogicalResult TestDialectLLVMIRTranslationInterface::amendOperation(
               }
 
               bool createSymbol = false;
-              if (auto boolAttr = dyn_cast<BoolAttr>(attr))
+              if (auto boolAttr = attr.dyn_cast<BoolAttr>())
                 createSymbol = boolAttr.getValue();
 
               if (createSymbol) {

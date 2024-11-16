@@ -86,10 +86,10 @@ public:
     // If the embox does not include a shape, then do not convert it
     if (auto shapeVal = embox.getShape())
       return rewriteDynamicShape(embox, rewriter, shapeVal);
-    if (mlir::isa<fir::ClassType>(embox.getType()))
+    if (embox.getType().isa<fir::ClassType>())
       TODO(embox.getLoc(), "embox conversion for fir.class type");
-    if (auto boxTy = mlir::dyn_cast<fir::BoxType>(embox.getType()))
-      if (auto seqTy = mlir::dyn_cast<fir::SequenceType>(boxTy.getEleTy()))
+    if (auto boxTy = embox.getType().dyn_cast<fir::BoxType>())
+      if (auto seqTy = boxTy.getEleTy().dyn_cast<fir::SequenceType>())
         if (!seqTy.hasDynamicExtents())
           return rewriteStaticShape(embox, rewriter, seqTy);
     return mlir::failure();
@@ -281,25 +281,9 @@ public:
   }
 };
 
-class DummyScopeOpConversion
-    : public mlir::OpRewritePattern<fir::DummyScopeOp> {
-public:
-  using OpRewritePattern::OpRewritePattern;
-
-  mlir::LogicalResult
-  matchAndRewrite(fir::DummyScopeOp dummyScopeOp,
-                  mlir::PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<fir::UndefOp>(dummyScopeOp,
-                                              dummyScopeOp.getType());
-    return mlir::success();
-  }
-};
-
 class CodeGenRewrite : public fir::impl::CodeGenRewriteBase<CodeGenRewrite> {
 public:
-  void runOnOperation() override final {
-    mlir::ModuleOp mod = getOperation();
-
+  void runOn(mlir::Operation *op, mlir::Region &region) {
     auto &context = getContext();
     mlir::ConversionTarget target(context);
     target.addLegalDialect<mlir::arith::ArithDialect, fir::FIROpsDialect,
@@ -307,16 +291,17 @@ public:
     target.addIllegalOp<fir::ArrayCoorOp>();
     target.addIllegalOp<fir::ReboxOp>();
     target.addIllegalOp<fir::DeclareOp>();
-    target.addIllegalOp<fir::DummyScopeOp>();
     target.addDynamicallyLegalOp<fir::EmboxOp>([](fir::EmboxOp embox) {
-      return !(embox.getShape() ||
-               mlir::isa<fir::SequenceType>(
-                   mlir::cast<fir::BaseBoxType>(embox.getType()).getEleTy()));
+      return !(embox.getShape() || embox.getType()
+                                       .cast<fir::BaseBoxType>()
+                                       .getEleTy()
+                                       .isa<fir::SequenceType>());
     });
     mlir::RewritePatternSet patterns(&context);
-    fir::populatePreCGRewritePatterns(patterns);
+    patterns.insert<EmboxConversion, ArrayCoorConversion, ReboxConversion,
+                    DeclareOpConversion>(&context);
     if (mlir::failed(
-            mlir::applyPartialConversion(mod, target, std::move(patterns)))) {
+            mlir::applyPartialConversion(op, target, std::move(patterns)))) {
       mlir::emitError(mlir::UnknownLoc::get(&context),
                       "error in running the pre-codegen conversions");
       signalPassFailure();
@@ -324,7 +309,16 @@ public:
     }
     // Erase any residual (fir.shape, fir.slice...).
     mlir::IRRewriter rewriter(&context);
-    (void)mlir::runRegionDCE(rewriter, mod->getRegions());
+    (void)mlir::runRegionDCE(rewriter, op->getRegions());
+  }
+
+  void runOnOperation() override final {
+    // Call runOn on all top level regions that may contain emboxOp/arrayCoorOp.
+    auto mod = getOperation();
+    for (auto func : mod.getOps<mlir::func::FuncOp>())
+      runOn(func, func.getBody());
+    for (auto global : mod.getOps<fir::GlobalOp>())
+      runOn(global, global.getRegion());
   }
 };
 
@@ -332,10 +326,4 @@ public:
 
 std::unique_ptr<mlir::Pass> fir::createFirCodeGenRewritePass() {
   return std::make_unique<CodeGenRewrite>();
-}
-
-void fir::populatePreCGRewritePatterns(mlir::RewritePatternSet &patterns) {
-  patterns.insert<EmboxConversion, ArrayCoorConversion, ReboxConversion,
-                  DeclareOpConversion, DummyScopeOpConversion>(
-      patterns.getContext());
 }

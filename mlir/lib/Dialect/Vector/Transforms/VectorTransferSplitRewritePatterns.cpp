@@ -171,7 +171,7 @@ static MemRefType getCastCompatibleMemRefType(MemRefType aT, MemRefType bT) {
 /// is first inserted, followed by a `memref.cast`.
 static Value castToCompatibleMemRefType(OpBuilder &b, Value memref,
                                         MemRefType compatibleMemRefType) {
-  MemRefType sourceType = cast<MemRefType>(memref.getType());
+  MemRefType sourceType = memref.getType().cast<MemRefType>();
   Value res = memref;
   if (sourceType.getMemorySpace() != compatibleMemRefType.getMemorySpace()) {
     sourceType = MemRefType::get(

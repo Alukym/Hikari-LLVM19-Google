@@ -42,14 +42,6 @@ add_header_library(
 )
 
 add_header_library(
-  sign
-  HDRS
-    sign.h
-  DEPENDS
-    libc.src.__support.macros.attributes
-)
-
-add_header_library(
   error_or
   HDRS
     error_or.h
@@ -104,7 +96,7 @@ add_header_library(
   HDRS
     integer_to_string.h
   DEPENDS
-    .big_int
+    .uint
     libc.src.__support.common
     libc.src.__support.CPP.algorithm
     libc.src.__support.CPP.limits
@@ -204,9 +196,9 @@ add_header_library(
 )
 
 add_header_library(
-  big_int
+  uint
   HDRS
-    big_int.h
+    UInt.h
   DEPENDS
     .math_extras
     .number_pair
@@ -220,9 +212,9 @@ add_header_library(
 add_header_library(
   uint128
   HDRS
-    uint128.h
+    UInt128.h
   DEPENDS
-    .big_int
+    .uint
     libc.src.__support.macros.properties.types
 )
 

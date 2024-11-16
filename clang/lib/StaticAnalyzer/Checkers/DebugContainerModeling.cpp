@@ -42,9 +42,9 @@ class DebugContainerModeling
                                                  CheckerContext &) const;
 
   CallDescriptionMap<FnCheck> Callbacks = {
-      {{CDM::SimpleFunc, {"clang_analyzer_container_begin"}, 1},
+      {{{"clang_analyzer_container_begin"}, 1},
        &DebugContainerModeling::analyzerContainerBegin},
-      {{CDM::SimpleFunc, {"clang_analyzer_container_end"}, 1},
+      {{{"clang_analyzer_container_end"}, 1},
        &DebugContainerModeling::analyzerContainerEnd},
   };
 

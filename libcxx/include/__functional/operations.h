@@ -13,7 +13,8 @@
 #include <__config>
 #include <__functional/binary_function.h>
 #include <__functional/unary_function.h>
-#include <__type_traits/desugars_to.h>
+#include <__type_traits/integral_constant.h>
+#include <__type_traits/operation_traits.h>
 #include <__utility/forward.h>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -40,10 +41,10 @@ _LIBCPP_CTAD_SUPPORTED_FOR_TYPE(plus);
 // The non-transparent std::plus specialization is only equivalent to a raw plus
 // operator when we don't perform an implicit conversion when calling it.
 template <class _Tp>
-inline const bool __desugars_to_v<__plus_tag, plus<_Tp>, _Tp, _Tp> = true;
+struct __desugars_to<__plus_tag, plus<_Tp>, _Tp, _Tp> : true_type {};
 
 template <class _Tp, class _Up>
-inline const bool __desugars_to_v<__plus_tag, plus<void>, _Tp, _Up> = true;
+struct __desugars_to<__plus_tag, plus<void>, _Tp, _Up> : true_type {};
 
 #if _LIBCPP_STD_VER >= 14
 template <>
@@ -314,11 +315,11 @@ struct _LIBCPP_TEMPLATE_VIS equal_to<void> {
 // The non-transparent std::equal_to specialization is only equivalent to a raw equality
 // comparison when we don't perform an implicit conversion when calling it.
 template <class _Tp>
-inline const bool __desugars_to_v<__equal_tag, equal_to<_Tp>, _Tp, _Tp> = true;
+struct __desugars_to<__equal_tag, equal_to<_Tp>, _Tp, _Tp> : true_type {};
 
 // In the transparent case, we do not enforce that
 template <class _Tp, class _Up>
-inline const bool __desugars_to_v<__equal_tag, equal_to<void>, _Tp, _Up> = true;
+struct __desugars_to<__equal_tag, equal_to<void>, _Tp, _Up> : true_type {};
 
 #if _LIBCPP_STD_VER >= 14
 template <class _Tp = void>
@@ -359,9 +360,6 @@ struct _LIBCPP_TEMPLATE_VIS less : __binary_function<_Tp, _Tp, bool> {
 };
 _LIBCPP_CTAD_SUPPORTED_FOR_TYPE(less);
 
-template <class _Tp>
-inline const bool __desugars_to_v<__less_tag, less<_Tp>, _Tp, _Tp> = true;
-
 #if _LIBCPP_STD_VER >= 14
 template <>
 struct _LIBCPP_TEMPLATE_VIS less<void> {
@@ -373,9 +371,6 @@ struct _LIBCPP_TEMPLATE_VIS less<void> {
   }
   typedef void is_transparent;
 };
-
-template <class _Tp>
-inline const bool __desugars_to_v<__less_tag, less<>, _Tp, _Tp> = true;
 #endif
 
 #if _LIBCPP_STD_VER >= 14

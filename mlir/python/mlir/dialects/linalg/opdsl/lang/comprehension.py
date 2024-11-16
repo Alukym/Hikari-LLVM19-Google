@@ -291,12 +291,6 @@ class UnaryFn:
     ceil = UnaryFnType("ceil")
     floor = UnaryFnType("floor")
     negf = UnaryFnType("negf")
-    round = UnaryFnType("round")
-    sqrt = UnaryFnType("sqrt")
-    rsqrt = UnaryFnType("rsqrt")
-    square = UnaryFnType("square")
-    tanh = UnaryFnType("tanh")
-    erf = UnaryFnType("erf")
 
 
 class BinaryFnType:
@@ -336,7 +330,6 @@ class BinaryFn:
     min_signed = BinaryFnType("min_signed")
     max_unsigned = BinaryFnType("max_unsigned")
     min_unsigned = BinaryFnType("min_unsigned")
-    powf = BinaryFnType("powf")
 
 
 class TypeFnType:

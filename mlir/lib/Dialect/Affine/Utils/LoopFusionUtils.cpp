@@ -211,7 +211,8 @@ static unsigned getMaxLoopDepth(ArrayRef<Operation *> srcOps,
   unsigned loopDepth = getInnermostCommonLoopDepth(targetDstOps);
 
   // Return common loop depth for loads if there are no store ops.
-  if (all_of(targetDstOps, llvm::IsaPred<AffineReadOpInterface>))
+  if (all_of(targetDstOps,
+             [&](Operation *op) { return isa<AffineReadOpInterface>(op); }))
     return loopDepth;
 
   // Check dependences on all pairs of ops in 'targetDstOps' and store the

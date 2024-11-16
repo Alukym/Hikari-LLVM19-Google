@@ -490,7 +490,7 @@ private:
   template <typename OpT>
   RegisteredOperationName getCheckRegisteredInfo(MLIRContext *ctx) {
     std::optional<RegisteredOperationName> opName =
-        RegisteredOperationName::lookup(TypeID::get<OpT>(), ctx);
+        RegisteredOperationName::lookup(OpT::getOperationName(), ctx);
     if (LLVM_UNLIKELY(!opName)) {
       llvm::report_fatal_error(
           "Building op `" + OpT::getOperationName() +
@@ -517,7 +517,7 @@ public:
 
   /// Create an operation of specific op type at the current insertion point,
   /// and immediately try to fold it. This functions populates 'results' with
-  /// the results of the operation.
+  /// the results after folding the operation.
   template <typename OpTy, typename... Args>
   void createOrFold(SmallVectorImpl<Value> &results, Location location,
                     Args &&...args) {
@@ -530,17 +530,10 @@ public:
     if (block)
       block->getOperations().insert(insertPoint, op);
 
-    // Attempt to fold the operation.
-    if (succeeded(tryFold(op, results)) && !results.empty()) {
-      // Erase the operation, if the fold removed the need for this operation.
-      // Note: The fold already populated the results in this case.
+    // Fold the operation. If successful erase it, otherwise notify.
+    if (succeeded(tryFold(op, results)))
       op->erase();
-      return;
-    }
-
-    ResultRange opResults = op->getResults();
-    results.assign(opResults.begin(), opResults.end());
-    if (block && listener)
+    else if (block && listener)
       listener->notifyOperationInserted(op, /*previous=*/{});
   }
 
@@ -567,8 +560,7 @@ public:
   }
 
   /// Attempts to fold the given operation and places new results within
-  /// `results`. Returns success if the operation was folded, failure otherwise.
-  /// If the fold was in-place, `results` will not be filled.
+  /// 'results'. Returns success if the operation was folded, failure otherwise.
   /// Note: This function does not erase the operation on a successful fold.
   LogicalResult tryFold(Operation *op, SmallVectorImpl<Value> &results);
 

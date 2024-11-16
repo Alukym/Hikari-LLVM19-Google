@@ -13,7 +13,6 @@
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Bufferization/IR/BufferDeallocationOpInterface.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -152,7 +151,8 @@ LogicalResult
 MMAMatrixType::verify(function_ref<InFlightDiagnostic()> emitError,
                       ArrayRef<int64_t> shape, Type elementType,
                       StringRef operand) {
-  if (operand != "AOp" && operand != "BOp" && operand != "COp")
+  if (!operand.equals("AOp") && !operand.equals("BOp") &&
+      !operand.equals("COp"))
     return emitError() << "operand expected to be one of AOp, BOp or COp";
 
   if (shape.size() != 2)
@@ -215,8 +215,6 @@ void GPUDialect::initialize() {
 #include "mlir/Dialect/GPU/IR/GPUOpsAttributes.cpp.inc"
       >();
   addInterfaces<GPUInlinerInterface>();
-  declarePromisedInterface<bufferization::BufferDeallocationOpInterface,
-                           TerminatorOp>();
 }
 
 static std::string getSparseHandleKeyword(SparseHandleKind kind) {
@@ -1940,7 +1938,8 @@ LogicalResult SubgroupMmaLoadMatrixOp::verify() {
     return emitError(
         "expected source memref most minor dim must have unit stride");
 
-  if (operand != "AOp" && operand != "BOp" && operand != "COp")
+  if (!operand.equals("AOp") && !operand.equals("BOp") &&
+      !operand.equals("COp"))
     return emitError("only AOp, BOp and COp can be loaded");
 
   return success();
@@ -1960,7 +1959,7 @@ LogicalResult SubgroupMmaStoreMatrixOp::verify() {
     return emitError(
         "expected destination memref most minor dim must have unit stride");
 
-  if (srcMatrixType.getOperand() != "COp")
+  if (!srcMatrixType.getOperand().equals("COp"))
     return emitError(
         "expected the operand matrix being stored to have 'COp' operand type");
 
@@ -1978,8 +1977,9 @@ LogicalResult SubgroupMmaComputeOp::verify() {
   opTypes.push_back(llvm::cast<MMAMatrixType>(getOpB().getType()));
   opTypes.push_back(llvm::cast<MMAMatrixType>(getOpC().getType()));
 
-  if (opTypes[A].getOperand() != "AOp" || opTypes[B].getOperand() != "BOp" ||
-      opTypes[C].getOperand() != "COp")
+  if (!opTypes[A].getOperand().equals("AOp") ||
+      !opTypes[B].getOperand().equals("BOp") ||
+      !opTypes[C].getOperand().equals("COp"))
     return emitError("operands must be in the order AOp, BOp, COp");
 
   ArrayRef<int64_t> aShape, bShape, cShape;

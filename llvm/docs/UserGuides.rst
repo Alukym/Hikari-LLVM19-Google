@@ -43,7 +43,6 @@ intermediate LLVM representation.
    HowToCrossCompileBuiltinsOnArm
    HowToCrossCompileLLVM
    HowToUpdateDebugInfo
-   InstCombineContributorGuide
    InstrProfileFormat
    InstrRefDebugInfo
    LinkTimeOptimization
@@ -182,14 +181,10 @@ Optimizations
 
 :doc:`RemoveDIsDebugInfo`
    This is a migration guide describing how to move from debug info using
-   intrinsics such as dbg.value to using the non-instruction DbgRecord object.
+   intrinsics such as dbg.value to using the non-instruction DPValue object.
 
 :doc:`InstrProfileFormat`
    This document explains two binary formats of instrumentation-based profiles.
-
-:doc:`InstCombineContributorGuide`
-   This document specifies guidelines for contributions for InstCombine and
-   related passes.
 
 Code Generation
 ---------------

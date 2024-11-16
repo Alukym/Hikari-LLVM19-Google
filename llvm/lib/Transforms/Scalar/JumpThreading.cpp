@@ -401,8 +401,8 @@ static bool replaceFoldableUses(Instruction *Cond, Value *ToVal,
     Changed |= replaceNonLocalUsesWith(Cond, ToVal);
   for (Instruction &I : reverse(*KnownAtEndOfBB)) {
     // Replace any debug-info record users of Cond with ToVal.
-    for (DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
-      DVR.replaceVariableLocationOp(Cond, ToVal, true);
+    for (DPValue &DPV : DPValue::filter(I.getDbgRecordRange()))
+      DPV.replaceVariableLocationOp(Cond, ToVal, true);
 
     // Reached the Cond whose uses we are trying to replace, so there are no
     // more uses.
@@ -868,8 +868,7 @@ bool JumpThreadingPass::computeValueKnownInPredecessorsImpl(
 
       for (const auto &LHSVal : LHSVals) {
         Constant *V = LHSVal.first;
-        Constant *Folded =
-            ConstantFoldCompareInstOperands(Pred, V, CmpConst, DL);
+        Constant *Folded = ConstantExpr::getCompare(Pred, V, CmpConst);
         if (Constant *KC = getKnownConstant(Folded, WantInteger))
           Result.emplace_back(KC, LHSVal.second);
       }
@@ -1510,8 +1509,7 @@ findMostPopularDest(BasicBlock *BB,
 // BB->getSinglePredecessor() and then on to BB.
 Constant *JumpThreadingPass::evaluateOnPredecessorEdge(BasicBlock *BB,
                                                        BasicBlock *PredPredBB,
-                                                       Value *V,
-                                                       const DataLayout &DL) {
+                                                       Value *V) {
   BasicBlock *PredBB = BB->getSinglePredecessor();
   assert(PredBB && "Expected a single predecessor");
 
@@ -1536,12 +1534,11 @@ Constant *JumpThreadingPass::evaluateOnPredecessorEdge(BasicBlock *BB,
   if (CmpInst *CondCmp = dyn_cast<CmpInst>(V)) {
     if (CondCmp->getParent() == BB) {
       Constant *Op0 =
-          evaluateOnPredecessorEdge(BB, PredPredBB, CondCmp->getOperand(0), DL);
+          evaluateOnPredecessorEdge(BB, PredPredBB, CondCmp->getOperand(0));
       Constant *Op1 =
-          evaluateOnPredecessorEdge(BB, PredPredBB, CondCmp->getOperand(1), DL);
+          evaluateOnPredecessorEdge(BB, PredPredBB, CondCmp->getOperand(1));
       if (Op0 && Op1) {
-        return ConstantFoldCompareInstOperands(CondCmp->getPredicate(), Op0,
-                                               Op1, DL);
+        return ConstantExpr::getCompare(CondCmp->getPredicate(), Op0, Op1);
       }
     }
     return nullptr;
@@ -1879,7 +1876,7 @@ bool JumpThreadingPass::processBranchOnXOR(BinaryOperator *BO) {
 static void addPHINodeEntriesForMappedBlock(BasicBlock *PHIBB,
                                             BasicBlock *OldPred,
                                             BasicBlock *NewPred,
-                                            ValueToValueMapTy &ValueMap) {
+                                     DenseMap<Instruction*, Value*> &ValueMap) {
   for (PHINode &PN : PHIBB->phis()) {
     // Ok, we have a PHI node.  Figure out what the incoming value was for the
     // DestBlock.
@@ -1887,7 +1884,7 @@ static void addPHINodeEntriesForMappedBlock(BasicBlock *PHIBB,
 
     // Remap the value if necessary.
     if (Instruction *Inst = dyn_cast<Instruction>(IV)) {
-      ValueToValueMapTy::iterator I = ValueMap.find(Inst);
+      DenseMap<Instruction*, Value*>::iterator I = ValueMap.find(Inst);
       if (I != ValueMap.end())
         IV = I->second;
     }
@@ -1948,8 +1945,9 @@ bool JumpThreadingPass::maybeMergeBasicBlockIntoOnlyPred(BasicBlock *BB) {
 
 /// Update the SSA form.  NewBB contains instructions that are copied from BB.
 /// ValueMapping maps old values in BB to new ones in NewBB.
-void JumpThreadingPass::updateSSA(BasicBlock *BB, BasicBlock *NewBB,
-                                  ValueToValueMapTy &ValueMapping) {
+void JumpThreadingPass::updateSSA(
+    BasicBlock *BB, BasicBlock *NewBB,
+    DenseMap<Instruction *, Value *> &ValueMapping) {
   // If there were values defined in BB that are used outside the block, then we
   // now have to update all uses of the value to use either the original value,
   // the cloned value, or some PHI derived value.  This can require arbitrary
@@ -1957,7 +1955,7 @@ void JumpThreadingPass::updateSSA(BasicBlock *BB, BasicBlock *NewBB,
   SSAUpdater SSAUpdate;
   SmallVector<Use *, 16> UsesToRename;
   SmallVector<DbgValueInst *, 4> DbgValues;
-  SmallVector<DbgVariableRecord *, 4> DbgVariableRecords;
+  SmallVector<DPValue *, 4> DPValues;
 
   for (Instruction &I : *BB) {
     // Scan all uses of this instruction to see if it is used outside of its
@@ -1974,16 +1972,16 @@ void JumpThreadingPass::updateSSA(BasicBlock *BB, BasicBlock *NewBB,
     }
 
     // Find debug values outside of the block
-    findDbgValues(DbgValues, &I, &DbgVariableRecords);
+    findDbgValues(DbgValues, &I, &DPValues);
     llvm::erase_if(DbgValues, [&](const DbgValueInst *DbgVal) {
       return DbgVal->getParent() == BB;
     });
-    llvm::erase_if(DbgVariableRecords, [&](const DbgVariableRecord *DbgVarRec) {
-      return DbgVarRec->getParent() == BB;
+    llvm::erase_if(DPValues, [&](const DPValue *DPVal) {
+      return DPVal->getParent() == BB;
     });
 
     // If there are no uses outside the block, we're done with this instruction.
-    if (UsesToRename.empty() && DbgValues.empty() && DbgVariableRecords.empty())
+    if (UsesToRename.empty() && DbgValues.empty() && DPValues.empty())
       continue;
     LLVM_DEBUG(dbgs() << "JT: Renaming non-local uses of: " << I << "\n");
 
@@ -1996,11 +1994,11 @@ void JumpThreadingPass::updateSSA(BasicBlock *BB, BasicBlock *NewBB,
 
     while (!UsesToRename.empty())
       SSAUpdate.RewriteUse(*UsesToRename.pop_back_val());
-    if (!DbgValues.empty() || !DbgVariableRecords.empty()) {
+    if (!DbgValues.empty() || !DPValues.empty()) {
       SSAUpdate.UpdateDebugValues(&I, DbgValues);
-      SSAUpdate.UpdateDebugValues(&I, DbgVariableRecords);
+      SSAUpdate.UpdateDebugValues(&I, DPValues);
       DbgValues.clear();
-      DbgVariableRecords.clear();
+      DPValues.clear();
     }
 
     LLVM_DEBUG(dbgs() << "\n");
@@ -2010,15 +2008,14 @@ void JumpThreadingPass::updateSSA(BasicBlock *BB, BasicBlock *NewBB,
 /// Clone instructions in range [BI, BE) to NewBB.  For PHI nodes, we only clone
 /// arguments that come from PredBB.  Return the map from the variables in the
 /// source basic block to the variables in the newly created basic block.
-
-void JumpThreadingPass::cloneInstructions(ValueToValueMapTy &ValueMapping,
-                                          BasicBlock::iterator BI,
-                                          BasicBlock::iterator BE,
-                                          BasicBlock *NewBB,
-                                          BasicBlock *PredBB) {
+DenseMap<Instruction *, Value *>
+JumpThreadingPass::cloneInstructions(BasicBlock::iterator BI,
+                                     BasicBlock::iterator BE, BasicBlock *NewBB,
+                                     BasicBlock *PredBB) {
   // We are going to have to map operands from the source basic block to the new
   // copy of the block 'NewBB'.  If there are PHI nodes in the source basic
   // block, evaluate them to account for entry from PredBB.
+  DenseMap<Instruction *, Value *> ValueMapping;
 
   // Retargets llvm.dbg.value to any renamed variables.
   auto RetargetDbgValueIfPossible = [&](Instruction *NewInst) -> bool {
@@ -2044,11 +2041,11 @@ void JumpThreadingPass::cloneInstructions(ValueToValueMapTy &ValueMapping,
     return true;
   };
 
-  // Duplicate implementation of the above dbg.value code, using
-  // DbgVariableRecords instead.
-  auto RetargetDbgVariableRecordIfPossible = [&](DbgVariableRecord *DVR) {
+  // Duplicate implementation of the above dbg.value code, using DPValues
+  // instead.
+  auto RetargetDPValueIfPossible = [&](DPValue *DPV) {
     SmallSet<std::pair<Value *, Value *>, 16> OperandsToRemap;
-    for (auto *Op : DVR->location_ops()) {
+    for (auto *Op : DPV->location_ops()) {
       Instruction *OpInst = dyn_cast<Instruction>(Op);
       if (!OpInst)
         continue;
@@ -2059,7 +2056,7 @@ void JumpThreadingPass::cloneInstructions(ValueToValueMapTy &ValueMapping,
     }
 
     for (auto &[OldOp, MappedOp] : OperandsToRemap)
-      DVR->replaceVariableLocationOp(OldOp, MappedOp);
+      DPV->replaceVariableLocationOp(OldOp, MappedOp);
   };
 
   BasicBlock *RangeBB = BI->getParent();
@@ -2083,9 +2080,9 @@ void JumpThreadingPass::cloneInstructions(ValueToValueMapTy &ValueMapping,
   cloneNoAliasScopes(NoAliasScopes, ClonedScopes, "thread", Context);
 
   auto CloneAndRemapDbgInfo = [&](Instruction *NewInst, Instruction *From) {
-    auto DVRRange = NewInst->cloneDebugInfoFrom(From);
-    for (DbgVariableRecord &DVR : filterDbgVars(DVRRange))
-      RetargetDbgVariableRecordIfPossible(&DVR);
+    auto DPVRange = NewInst->cloneDebugInfoFrom(From);
+    for (DPValue &DPV : DPValue::filter(DPVRange))
+      RetargetDPValueIfPossible(&DPV);
   };
 
   // Clone the non-phi instructions of the source basic block into NewBB,
@@ -2106,24 +2103,24 @@ void JumpThreadingPass::cloneInstructions(ValueToValueMapTy &ValueMapping,
     // Remap operands to patch up intra-block references.
     for (unsigned i = 0, e = New->getNumOperands(); i != e; ++i)
       if (Instruction *Inst = dyn_cast<Instruction>(New->getOperand(i))) {
-        ValueToValueMapTy::iterator I = ValueMapping.find(Inst);
+        DenseMap<Instruction *, Value *>::iterator I = ValueMapping.find(Inst);
         if (I != ValueMapping.end())
           New->setOperand(i, I->second);
       }
   }
 
-  // There may be DbgVariableRecords on the terminator, clone directly from
-  // marker to marker as there isn't an instruction there.
+  // There may be DPValues on the terminator, clone directly from marker
+  // to marker as there isn't an instruction there.
   if (BE != RangeBB->end() && BE->hasDbgRecords()) {
     // Dump them at the end.
-    DbgMarker *Marker = RangeBB->getMarker(BE);
-    DbgMarker *EndMarker = NewBB->createMarker(NewBB->end());
-    auto DVRRange = EndMarker->cloneDebugInfoFrom(Marker, std::nullopt);
-    for (DbgVariableRecord &DVR : filterDbgVars(DVRRange))
-      RetargetDbgVariableRecordIfPossible(&DVR);
+    DPMarker *Marker = RangeBB->getMarker(BE);
+    DPMarker *EndMarker = NewBB->createMarker(NewBB->end());
+    auto DPVRange = EndMarker->cloneDebugInfoFrom(Marker, std::nullopt);
+    for (DPValue &DPV : DPValue::filter(DPVRange))
+      RetargetDPValueIfPossible(&DPV);
   }
 
-  return;
+  return ValueMapping;
 }
 
 /// Attempt to thread through two successive basic blocks.
@@ -2194,13 +2191,12 @@ bool JumpThreadingPass::maybethreadThroughTwoBasicBlocks(BasicBlock *BB,
   unsigned OneCount = 0;
   BasicBlock *ZeroPred = nullptr;
   BasicBlock *OnePred = nullptr;
-  const DataLayout &DL = BB->getModule()->getDataLayout();
   for (BasicBlock *P : predecessors(PredBB)) {
     // If PredPred ends with IndirectBrInst, we can't handle it.
     if (isa<IndirectBrInst>(P->getTerminator()))
       continue;
     if (ConstantInt *CI = dyn_cast_or_null<ConstantInt>(
-            evaluateOnPredecessorEdge(BB, P, Cond, DL))) {
+            evaluateOnPredecessorEdge(BB, P, Cond))) {
       if (CI->isZero()) {
         ZeroCount++;
         ZeroPred = P;
@@ -2299,9 +2295,8 @@ void JumpThreadingPass::threadThroughTwoBasicBlocks(BasicBlock *PredPredBB,
   // We are going to have to map operands from the original BB block to the new
   // copy of the block 'NewBB'.  If there are PHI nodes in PredBB, evaluate them
   // to account for entry from PredPredBB.
-  ValueToValueMapTy ValueMapping;
-  cloneInstructions(ValueMapping, PredBB->begin(), PredBB->end(), NewBB,
-                    PredPredBB);
+  DenseMap<Instruction *, Value *> ValueMapping =
+      cloneInstructions(PredBB->begin(), PredBB->end(), NewBB, PredPredBB);
 
   // Copy the edge probabilities from PredBB to NewBB.
   if (BPI)
@@ -2424,9 +2419,8 @@ void JumpThreadingPass::threadEdge(BasicBlock *BB,
   }
 
   // Copy all the instructions from BB to NewBB except the terminator.
-  ValueToValueMapTy ValueMapping;
-  cloneInstructions(ValueMapping, BB->begin(), std::prev(BB->end()), NewBB,
-                    PredBB);
+  DenseMap<Instruction *, Value *> ValueMapping =
+      cloneInstructions(BB->begin(), std::prev(BB->end()), NewBB, PredBB);
 
   // We didn't copy the terminator from BB over to NewBB, because there is now
   // an unconditional jump to SuccBB.  Insert the unconditional jump.
@@ -2681,7 +2675,7 @@ bool JumpThreadingPass::duplicateCondBranchOnPHIIntoPred(
 
   // We are going to have to map operands from the original BB block into the
   // PredBB block.  Evaluate PHI nodes in BB.
-  ValueToValueMapTy ValueMapping;
+  DenseMap<Instruction*, Value*> ValueMapping;
 
   BasicBlock::iterator BI = BB->begin();
   for (; PHINode *PN = dyn_cast<PHINode>(BI); ++BI)
@@ -2695,13 +2689,10 @@ bool JumpThreadingPass::duplicateCondBranchOnPHIIntoPred(
     // Remap operands to patch up intra-block references.
     for (unsigned i = 0, e = New->getNumOperands(); i != e; ++i)
       if (Instruction *Inst = dyn_cast<Instruction>(New->getOperand(i))) {
-        ValueToValueMapTy::iterator I = ValueMapping.find(Inst);
+        DenseMap<Instruction*, Value*>::iterator I = ValueMapping.find(Inst);
         if (I != ValueMapping.end())
           New->setOperand(i, I->second);
       }
-
-    // Remap debug variable operands.
-    remapDebugVariable(ValueMapping, New);
 
     // If this instruction can be simplified after the operands are updated,
     // just use the simplified value instead.  This frequently happens due to

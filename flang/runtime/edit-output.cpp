@@ -9,15 +9,13 @@
 #include "edit-output.h"
 #include "emit-encoded.h"
 #include "utf.h"
-#include "flang/Common/real.h"
 #include "flang/Common/uint128.h"
 #include <algorithm>
 
 namespace Fortran::runtime::io {
-RT_OFFLOAD_API_GROUP_BEGIN
 
 // In output statement, add a space between numbers and characters.
-static RT_API_ATTRS void addSpaceBeforeCharacter(IoStatementState &io) {
+static void addSpaceBeforeCharacter(IoStatementState &io) {
   if (auto *list{io.get_if<ListDirectedStatementState<Direction::Output>>()}) {
     list->set_lastWasUndelimitedCharacter(false);
   }
@@ -27,8 +25,8 @@ static RT_API_ATTRS void addSpaceBeforeCharacter(IoStatementState &io) {
 // representation of what is interpreted to be a single unsigned integer value.
 // When used with character data, endianness is exposed.
 template <int LOG2_BASE>
-static RT_API_ATTRS bool EditBOZOutput(IoStatementState &io,
-    const DataEdit &edit, const unsigned char *data0, std::size_t bytes) {
+static bool EditBOZOutput(IoStatementState &io, const DataEdit &edit,
+    const unsigned char *data0, std::size_t bytes) {
   addSpaceBeforeCharacter(io);
   int digits{static_cast<int>((bytes * 8) / LOG2_BASE)};
   int get{static_cast<int>(bytes * 8) - digits * LOG2_BASE};
@@ -108,7 +106,7 @@ static RT_API_ATTRS bool EditBOZOutput(IoStatementState &io,
 }
 
 template <int KIND>
-bool RT_API_ATTRS EditIntegerOutput(IoStatementState &io, const DataEdit &edit,
+bool EditIntegerOutput(IoStatementState &io, const DataEdit &edit,
     common::HostSignedIntType<8 * KIND> n) {
   addSpaceBeforeCharacter(io);
   char buffer[130], *end{&buffer[sizeof buffer]}, *p{end};
@@ -188,7 +186,7 @@ bool RT_API_ATTRS EditIntegerOutput(IoStatementState &io, const DataEdit &edit,
 }
 
 // Formats the exponent (see table 13.1 for all the cases)
-RT_API_ATTRS const char *RealOutputEditingBase::FormatExponent(
+const char *RealOutputEditingBase::FormatExponent(
     int expo, const DataEdit &edit, int &length) {
   char *eEnd{&exponent_[sizeof exponent_]};
   char *exponent{eEnd};
@@ -227,7 +225,7 @@ RT_API_ATTRS const char *RealOutputEditingBase::FormatExponent(
   return overflow ? nullptr : exponent;
 }
 
-RT_API_ATTRS bool RealOutputEditingBase::EmitPrefix(
+bool RealOutputEditingBase::EmitPrefix(
     const DataEdit &edit, std::size_t length, std::size_t width) {
   if (edit.IsListDirected()) {
     int prefixLength{edit.descriptor == DataEdit::ListDirectedRealPart ? 2
@@ -248,7 +246,7 @@ RT_API_ATTRS bool RealOutputEditingBase::EmitPrefix(
   }
 }
 
-RT_API_ATTRS bool RealOutputEditingBase::EmitSuffix(const DataEdit &edit) {
+bool RealOutputEditingBase::EmitSuffix(const DataEdit &edit) {
   if (edit.descriptor == DataEdit::ListDirectedRealPart) {
     return EmitAscii(
         io_, edit.modes.editingFlags & decimalComma ? ";" : ",", 1);
@@ -260,10 +258,8 @@ RT_API_ATTRS bool RealOutputEditingBase::EmitSuffix(const DataEdit &edit) {
 }
 
 template <int KIND>
-RT_API_ATTRS decimal::ConversionToDecimalResult
-RealOutputEditing<KIND>::ConvertToDecimal(
+decimal::ConversionToDecimalResult RealOutputEditing<KIND>::ConvertToDecimal(
     int significantDigits, enum decimal::FortranRounding rounding, int flags) {
-#if !defined(RT_DEVICE_COMPILATION)
   auto converted{decimal::ConvertToDecimal<binaryPrecision>(buffer_,
       sizeof buffer_, static_cast<enum decimal::DecimalConversionFlags>(flags),
       significantDigits, rounding, x_)};
@@ -273,13 +269,9 @@ RealOutputEditing<KIND>::ConvertToDecimal(
         sizeof buffer_);
   }
   return converted;
-#else // defined(RT_DEVICE_COMPILATION)
-  // TODO: enable Decimal library build for the device.
-  io_.GetIoErrorHandler().Crash("not implemented yet: decimal conversion");
-#endif // defined(RT_DEVICE_COMPILATION)
 }
 
-static RT_API_ATTRS bool IsInfOrNaN(const char *p, int length) {
+static bool IsInfOrNaN(const char *p, int length) {
   if (!p || length < 1) {
     return false;
   }
@@ -294,8 +286,7 @@ static RT_API_ATTRS bool IsInfOrNaN(const char *p, int length) {
 
 // 13.7.2.3.3 in F'2018
 template <int KIND>
-RT_API_ATTRS bool RealOutputEditing<KIND>::EditEorDOutput(
-    const DataEdit &edit) {
+bool RealOutputEditing<KIND>::EditEorDOutput(const DataEdit &edit) {
   addSpaceBeforeCharacter(io_);
   int editDigits{edit.digits.value_or(0)}; // 'd' field
   int editWidth{edit.width.value_or(0)}; // 'w' field
@@ -431,7 +422,7 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditEorDOutput(
 
 // 13.7.2.3.2 in F'2018
 template <int KIND>
-RT_API_ATTRS bool RealOutputEditing<KIND>::EditFOutput(const DataEdit &edit) {
+bool RealOutputEditing<KIND>::EditFOutput(const DataEdit &edit) {
   addSpaceBeforeCharacter(io_);
   int fracDigits{edit.digits.value_or(0)}; // 'd' field
   const int editWidth{edit.width.value_or(0)}; // 'w' field
@@ -446,7 +437,6 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditFOutput(const DataEdit &edit) {
       fracDigits = sizeof buffer_ - 2; // sign & NUL
     }
   }
-  bool emitTrailingZeroes{!(flags & decimal::Minimize)};
   // Multiple conversions may be needed to get the right number of
   // effective rounded fractional digits.
   bool canIncrease{true};
@@ -527,18 +517,11 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditFOutput(const DataEdit &edit) {
     }
     int digitsBeforePoint{std::max(0, std::min(expo, convertedDigits))};
     int zeroesBeforePoint{std::max(0, expo - digitsBeforePoint)};
-    if (zeroesBeforePoint > 0 && (flags & decimal::Minimize)) {
-      // If a minimized result looks like an integer, emit all of
-      // its digits rather than clipping some to zeroes.
-      // This can happen with HUGE(0._2) == 65504._2.
-      flags &= ~decimal::Minimize;
-      continue;
-    }
     int zeroesAfterPoint{std::min(fracDigits, std::max(0, -expo))};
     int digitsAfterPoint{convertedDigits - digitsBeforePoint};
-    int trailingZeroes{emitTrailingZeroes
-            ? std::max(0, fracDigits - (zeroesAfterPoint + digitsAfterPoint))
-            : 0};
+    int trailingZeroes{flags & decimal::Minimize
+            ? 0
+            : std::max(0, fracDigits - (zeroesAfterPoint + digitsAfterPoint))};
     if (digitsBeforePoint + zeroesBeforePoint + zeroesAfterPoint +
             digitsAfterPoint + trailingZeroes ==
         0) {
@@ -569,12 +552,12 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditFOutput(const DataEdit &edit) {
 
 // 13.7.5.2.3 in F'2018
 template <int KIND>
-RT_API_ATTRS DataEdit RealOutputEditing<KIND>::EditForGOutput(DataEdit edit) {
+DataEdit RealOutputEditing<KIND>::EditForGOutput(DataEdit edit) {
   edit.descriptor = 'E';
   edit.variation = 'G'; // to suppress error for Ew.0
   int editWidth{edit.width.value_or(0)};
-  int significantDigits{edit.digits.value_or(
-      static_cast<int>(BinaryFloatingPoint::decimalPrecision))}; // 'd'
+  int significantDigits{
+      edit.digits.value_or(BinaryFloatingPoint::decimalPrecision)}; // 'd'
   if (editWidth > 0 && significantDigits == 0) {
     return edit; // Gw.0Ee -> Ew.0Ee for w > 0
   }
@@ -613,8 +596,7 @@ RT_API_ATTRS DataEdit RealOutputEditing<KIND>::EditForGOutput(DataEdit edit) {
 
 // 13.10.4 in F'2018
 template <int KIND>
-RT_API_ATTRS bool RealOutputEditing<KIND>::EditListDirectedOutput(
-    const DataEdit &edit) {
+bool RealOutputEditing<KIND>::EditListDirectedOutput(const DataEdit &edit) {
   decimal::ConversionToDecimalResult converted{
       ConvertToDecimal(1, edit.modes.round)};
   if (IsInfOrNaN(converted.str, static_cast<int>(converted.length))) {
@@ -648,9 +630,9 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditListDirectedOutput(
 // E.g., 2. is edited into 0X8.0P-2 rather than 0X2.0P0.  This implementation
 // follows that precedent so as to avoid a gratuitous incompatibility.
 template <int KIND>
-RT_API_ATTRS auto RealOutputEditing<KIND>::ConvertToHexadecimal(
-    int significantDigits, enum decimal::FortranRounding rounding,
-    int flags) -> ConvertToHexadecimalResult {
+auto RealOutputEditing<KIND>::ConvertToHexadecimal(
+    int significantDigits, enum decimal::FortranRounding rounding, int flags)
+    -> ConvertToHexadecimalResult {
   if (x_.IsNaN() || x_.IsInfinite()) {
     auto converted{ConvertToDecimal(significantDigits, rounding, flags)};
     return {converted.str, static_cast<int>(converted.length), 0};
@@ -706,7 +688,7 @@ RT_API_ATTRS auto RealOutputEditing<KIND>::ConvertToHexadecimal(
 }
 
 template <int KIND>
-RT_API_ATTRS bool RealOutputEditing<KIND>::EditEXOutput(const DataEdit &edit) {
+bool RealOutputEditing<KIND>::EditEXOutput(const DataEdit &edit) {
   addSpaceBeforeCharacter(io_);
   int editDigits{edit.digits.value_or(0)}; // 'd' field
   int significantDigits{editDigits + 1};
@@ -718,9 +700,7 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditEXOutput(const DataEdit &edit) {
   if ((editWidth == 0 && !edit.digits) || editDigits == 0) {
     // EX0 or EXw.0
     flags |= decimal::Minimize;
-    static constexpr int maxSigHexDigits{
-        (common::PrecisionOfRealKind(16) + 3) / 4};
-    significantDigits = maxSigHexDigits;
+    significantDigits = 28; // enough for 128-bit F.P.
   }
   auto converted{
       ConvertToHexadecimal(significantDigits, edit.modes.round, flags)};
@@ -757,65 +737,56 @@ RT_API_ATTRS bool RealOutputEditing<KIND>::EditEXOutput(const DataEdit &edit) {
           EmitAscii(io_, exponent, expoLength);
 }
 
-template <int KIND>
-RT_API_ATTRS bool RealOutputEditing<KIND>::Edit(const DataEdit &edit) {
-  const DataEdit *editPtr{&edit};
-  DataEdit newEdit;
-  if (editPtr->descriptor == 'G') {
-    // Avoid recursive call as in Edit(EditForGOutput(edit)).
-    newEdit = EditForGOutput(*editPtr);
-    editPtr = &newEdit;
-    RUNTIME_CHECK(io_.GetIoErrorHandler(), editPtr->descriptor != 'G');
-  }
-  switch (editPtr->descriptor) {
+template <int KIND> bool RealOutputEditing<KIND>::Edit(const DataEdit &edit) {
+  switch (edit.descriptor) {
   case 'D':
-    return EditEorDOutput(*editPtr);
+    return EditEorDOutput(edit);
   case 'E':
-    if (editPtr->variation == 'X') {
-      return EditEXOutput(*editPtr);
+    if (edit.variation == 'X') {
+      return EditEXOutput(edit);
     } else {
-      return EditEorDOutput(*editPtr);
+      return EditEorDOutput(edit);
     }
   case 'F':
-    return EditFOutput(*editPtr);
+    return EditFOutput(edit);
   case 'B':
-    return EditBOZOutput<1>(io_, *editPtr,
+    return EditBOZOutput<1>(io_, edit,
         reinterpret_cast<const unsigned char *>(&x_),
         common::BitsForBinaryPrecision(common::PrecisionOfRealKind(KIND)) >> 3);
   case 'O':
-    return EditBOZOutput<3>(io_, *editPtr,
+    return EditBOZOutput<3>(io_, edit,
         reinterpret_cast<const unsigned char *>(&x_),
         common::BitsForBinaryPrecision(common::PrecisionOfRealKind(KIND)) >> 3);
   case 'Z':
-    return EditBOZOutput<4>(io_, *editPtr,
+    return EditBOZOutput<4>(io_, edit,
         reinterpret_cast<const unsigned char *>(&x_),
         common::BitsForBinaryPrecision(common::PrecisionOfRealKind(KIND)) >> 3);
+  case 'G':
+    return Edit(EditForGOutput(edit));
   case 'L':
-    return EditLogicalOutput(
-        io_, *editPtr, *reinterpret_cast<const char *>(&x_));
+    return EditLogicalOutput(io_, edit, *reinterpret_cast<const char *>(&x_));
   case 'A': // legacy extension
     return EditCharacterOutput(
-        io_, *editPtr, reinterpret_cast<char *>(&x_), sizeof x_);
+        io_, edit, reinterpret_cast<char *>(&x_), sizeof x_);
   default:
-    if (editPtr->IsListDirected()) {
-      return EditListDirectedOutput(*editPtr);
+    if (edit.IsListDirected()) {
+      return EditListDirectedOutput(edit);
     }
     io_.GetIoErrorHandler().SignalError(IostatErrorInFormat,
         "Data edit descriptor '%c' may not be used with a REAL data item",
-        editPtr->descriptor);
+        edit.descriptor);
     return false;
   }
   return false;
 }
 
-RT_API_ATTRS bool ListDirectedLogicalOutput(IoStatementState &io,
+bool ListDirectedLogicalOutput(IoStatementState &io,
     ListDirectedStatementState<Direction::Output> &list, bool truth) {
   return list.EmitLeadingSpaceOrAdvance(io) &&
       EmitAscii(io, truth ? "T" : "F", 1);
 }
 
-RT_API_ATTRS bool EditLogicalOutput(
-    IoStatementState &io, const DataEdit &edit, bool truth) {
+bool EditLogicalOutput(IoStatementState &io, const DataEdit &edit, bool truth) {
   switch (edit.descriptor) {
   case 'L':
   case 'G':
@@ -830,11 +801,6 @@ RT_API_ATTRS bool EditLogicalOutput(
   case 'Z':
     return EditBOZOutput<4>(io, edit,
         reinterpret_cast<const unsigned char *>(&truth), sizeof truth);
-  case 'A': { // legacy extension
-    int truthBits{truth};
-    return EditCharacterOutput(
-        io, edit, reinterpret_cast<char *>(&truthBits), sizeof truthBits);
-  }
   default:
     io.GetIoErrorHandler().SignalError(IostatErrorInFormat,
         "Data edit descriptor '%c' may not be used with a LOGICAL data item",
@@ -844,7 +810,7 @@ RT_API_ATTRS bool EditLogicalOutput(
 }
 
 template <typename CHAR>
-RT_API_ATTRS bool ListDirectedCharacterOutput(IoStatementState &io,
+bool ListDirectedCharacterOutput(IoStatementState &io,
     ListDirectedStatementState<Direction::Output> &list, const CHAR *x,
     std::size_t length) {
   bool ok{true};
@@ -901,8 +867,8 @@ RT_API_ATTRS bool ListDirectedCharacterOutput(IoStatementState &io,
 }
 
 template <typename CHAR>
-RT_API_ATTRS bool EditCharacterOutput(IoStatementState &io,
-    const DataEdit &edit, const CHAR *x, std::size_t length) {
+bool EditCharacterOutput(IoStatementState &io, const DataEdit &edit,
+    const CHAR *x, std::size_t length) {
   int len{static_cast<int>(length)};
   int width{edit.width.value_or(len)};
   switch (edit.descriptor) {
@@ -934,15 +900,15 @@ RT_API_ATTRS bool EditCharacterOutput(IoStatementState &io,
       EmitEncoded(io, x, std::min(width, len));
 }
 
-template RT_API_ATTRS bool EditIntegerOutput<1>(
+template bool EditIntegerOutput<1>(
     IoStatementState &, const DataEdit &, std::int8_t);
-template RT_API_ATTRS bool EditIntegerOutput<2>(
+template bool EditIntegerOutput<2>(
     IoStatementState &, const DataEdit &, std::int16_t);
-template RT_API_ATTRS bool EditIntegerOutput<4>(
+template bool EditIntegerOutput<4>(
     IoStatementState &, const DataEdit &, std::int32_t);
-template RT_API_ATTRS bool EditIntegerOutput<8>(
+template bool EditIntegerOutput<8>(
     IoStatementState &, const DataEdit &, std::int64_t);
-template RT_API_ATTRS bool EditIntegerOutput<16>(
+template bool EditIntegerOutput<16>(
     IoStatementState &, const DataEdit &, common::int128_t);
 
 template class RealOutputEditing<2>;
@@ -953,22 +919,21 @@ template class RealOutputEditing<10>;
 // TODO: double/double
 template class RealOutputEditing<16>;
 
-template RT_API_ATTRS bool ListDirectedCharacterOutput(IoStatementState &,
+template bool ListDirectedCharacterOutput(IoStatementState &,
     ListDirectedStatementState<Direction::Output> &, const char *,
     std::size_t chars);
-template RT_API_ATTRS bool ListDirectedCharacterOutput(IoStatementState &,
+template bool ListDirectedCharacterOutput(IoStatementState &,
     ListDirectedStatementState<Direction::Output> &, const char16_t *,
     std::size_t chars);
-template RT_API_ATTRS bool ListDirectedCharacterOutput(IoStatementState &,
+template bool ListDirectedCharacterOutput(IoStatementState &,
     ListDirectedStatementState<Direction::Output> &, const char32_t *,
     std::size_t chars);
 
-template RT_API_ATTRS bool EditCharacterOutput(
+template bool EditCharacterOutput(
     IoStatementState &, const DataEdit &, const char *, std::size_t chars);
-template RT_API_ATTRS bool EditCharacterOutput(
+template bool EditCharacterOutput(
     IoStatementState &, const DataEdit &, const char16_t *, std::size_t chars);
-template RT_API_ATTRS bool EditCharacterOutput(
+template bool EditCharacterOutput(
     IoStatementState &, const DataEdit &, const char32_t *, std::size_t chars);
 
-RT_OFFLOAD_API_GROUP_END
 } // namespace Fortran::runtime::io

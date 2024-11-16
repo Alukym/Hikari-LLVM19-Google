@@ -9,11 +9,10 @@
 #ifndef LLVM_LIBC_SRC_SIGNAL_LINUX_SIGNAL_UTILS_H
 #define LLVM_LIBC_SRC_SIGNAL_LINUX_SIGNAL_UTILS_H
 
-#include "hdr/types/sigset_t.h"
 #include "src/__support/OSUtil/syscall.h" // For internal syscall function.
 #include "src/__support/common.h"
 
-#include <signal.h> // sigaction
+#include <signal.h>
 #include <stddef.h>
 #include <sys/syscall.h>          // For syscall numbers.
 

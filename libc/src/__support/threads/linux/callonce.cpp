@@ -6,8 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "futex_word.h"
+
+#include "src/__support/CPP/atomic.h"
+#include "src/__support/CPP/limits.h"     // INT_MAX
+#include "src/__support/OSUtil/syscall.h" // For syscall functions.
 #include "src/__support/threads/callonce.h"
-#include "src/__support/threads/linux/futex_utils.h"
+
+#include <linux/futex.h>
+#include <sys/syscall.h> // For syscall numbers.
 
 namespace LIBC_NAMESPACE {
 
@@ -17,7 +24,7 @@ static constexpr FutexWordType WAITING = 0x22;
 static constexpr FutexWordType FINISH = 0x33;
 
 int callonce(CallOnceFlag *flag, CallOnceCallback *func) {
-  auto *futex_word = reinterpret_cast<Futex *>(flag);
+  auto *futex_word = reinterpret_cast<cpp::Atomic<FutexWordType> *>(flag);
 
   FutexWordType not_called = NOT_CALLED;
 
@@ -26,15 +33,22 @@ int callonce(CallOnceFlag *flag, CallOnceCallback *func) {
   if (futex_word->compare_exchange_strong(not_called, START)) {
     func();
     auto status = futex_word->exchange(FINISH);
-    if (status == WAITING)
-      futex_word->notify_all();
+    if (status == WAITING) {
+      LIBC_NAMESPACE::syscall_impl<long>(FUTEX_SYSCALL_ID, &futex_word->val,
+                                         FUTEX_WAKE_PRIVATE,
+                                         INT_MAX, // Wake all waiters.
+                                         0, 0, 0);
+    }
     return 0;
   }
 
   FutexWordType status = START;
   if (futex_word->compare_exchange_strong(status, WAITING) ||
       status == WAITING) {
-    futex_word->wait(WAITING);
+    LIBC_NAMESPACE::syscall_impl<long>(
+        FUTEX_SYSCALL_ID, &futex_word->val, FUTEX_WAIT_PRIVATE,
+        WAITING, // Block only if status is still |WAITING|.
+        0, 0, 0);
   }
 
   return 0;
