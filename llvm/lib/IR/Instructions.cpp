@@ -3344,6 +3344,14 @@ BinaryOperator *BinaryOperator::CreateNeg(Value *Op, const Twine &Name,
                             InsertBefore);
 }
 
+// for the compatibility of Hikari
+BinaryOperator *BinaryOperator::CreateNeg(Value *Op, const Twine &Name,
+                                          Instruction *InsertBefore) {
+  Value *Zero = ConstantInt::get(Op->getType(), 0);
+  return new BinaryOperator(Instruction::Sub, Zero, Op, Op->getType(), Name,
+                            InsertBefore);
+}
+
 BinaryOperator *BinaryOperator::CreateNeg(Value *Op, const Twine &Name,
                                           BasicBlock *InsertAtEnd) {
   Value *Zero = ConstantInt::get(Op->getType(), 0);

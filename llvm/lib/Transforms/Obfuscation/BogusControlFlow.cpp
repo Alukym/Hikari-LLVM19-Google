@@ -494,11 +494,7 @@ struct BogusControlFlow : public FunctionPass {
               case 0:                              // do nothing
                 break;
               case 1:
-#if LLVM_VERSION_MAJOR >= 19
-                op = BinaryOperator::CreateNeg(i->getOperand(0), *var, BasicBlock::iterator(&*i));
-#else
                 op = BinaryOperator::CreateNeg(i->getOperand(0), *var, &*i);
-#endif
                 op1 = BinaryOperator::Create(Instruction::Add, op,
                                              i->getOperand(1), "gen", &*i);
                 break;

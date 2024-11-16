@@ -139,32 +139,17 @@ static BinaryOperator *buildNand(Value *a, Value *b,
 
 // Implementation of a = b - (-c)
 static void addNeg(BinaryOperator *bo) {
-#if LLVM_VERSION_MAJOR >= 19
-  BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", BasicBlock::iterator(bo));
-#else
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-#endif
   op = BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), op, "", bo);
   bo->replaceAllUsesWith(op);
 }
 
 // Implementation of a = -(-b + (-c))
 static void addDoubleNeg(BinaryOperator *bo) {
-#if LLVM_VERSION_MAJOR >= 19
-  BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(0), "", BasicBlock::iterator(bo));
-  BinaryOperator *op2 = BinaryOperator::CreateNeg(bo->getOperand(1), "", BasicBlock::iterator(bo));
-#else
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(0), "", bo);
   BinaryOperator *op2 = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-#endif
-
   op = BinaryOperator::Create(Instruction::Add, op, op2, "", bo);
-
-#if LLVM_VERSION_MAJOR >= 19
-  op = BinaryOperator::CreateNeg(op, "", BasicBlock::iterator(bo));
-#else
   op = BinaryOperator::CreateNeg(op, "", bo);
-#endif
   bo->replaceAllUsesWith(op);
 }
 
@@ -194,11 +179,7 @@ static void addRand2(BinaryOperator *bo) {
 static void addSubstitution(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(bo->getType(), 1);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-#if LLVM_VERSION_MAJOR >= 19
-  BinaryOperator *op1 = BinaryOperator::CreateNeg(co, "", BasicBlock::iterator(bo));
-#else
   BinaryOperator *op1 = BinaryOperator::CreateNeg(co, "", bo);
-#endif
   op = BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
   op = BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), op, "", bo);
   bo->replaceAllUsesWith(op);
@@ -228,11 +209,7 @@ static void addSubstitution3(BinaryOperator *bo) {
 
 // Implementation of a = b + (-c)
 static void subNeg(BinaryOperator *bo) {
-#if LLVM_VERSION_MAJOR >= 19
-  BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", BasicBlock::iterator(bo));
-#else
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-#endif
   op = BinaryOperator::Create(Instruction::Add, bo->getOperand(0), op, "", bo);
   bo->replaceAllUsesWith(op);
 }

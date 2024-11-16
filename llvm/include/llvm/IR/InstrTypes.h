@@ -467,6 +467,9 @@ public:
   ///
   static BinaryOperator *CreateNeg(Value *Op, const Twine &Name,
                                    BasicBlock::iterator InsertBefore);
+  // for the compatibility of Hikari
+  static BinaryOperator *CreateNeg(Value *Op, const Twine &Name,
+                                   Instruction *InsertBefore);
   static BinaryOperator *CreateNeg(Value *Op, const Twine &Name = "",
                                    BasicBlock *InsertAtEnd = nullptr);
   static BinaryOperator *CreateNSWNeg(Value *Op, const Twine &Name,
