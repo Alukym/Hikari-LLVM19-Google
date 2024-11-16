@@ -952,7 +952,7 @@ option(LLVM_ENABLE_PLUGINS "Enable plugin support" ${LLVM_ENABLE_PLUGINS_default
 set(LLVM_ENABLE_NEW_PASS_MANAGER TRUE CACHE BOOL
   "Enable the new pass manager by default.")
 if(NOT LLVM_ENABLE_NEW_PASS_MANAGER)
-  message(FATAL_ERROR "Enabling the legacy pass manager on the cmake level is"
+  message(WARNING "Enabling the legacy pass manager on the cmake level is"
                       " no longer supported.")
 endif()
 
