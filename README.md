@@ -1,5 +1,8 @@
 # The LLVM Compiler Infrastructure
 
+Original project:
+[Hikari-LLVM15](https://github.com/61bcdefg/Hikari-LLVM15)
+
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/llvm/llvm-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/llvm/llvm-project)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8273/badge)](https://www.bestpractices.dev/projects/8273)
 [![libc++](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml/badge.svg?branch=main&event=schedule)](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml?query=event%3Aschedule)
@@ -25,6 +28,13 @@ the [libc++ C++ standard library](https://libcxx.llvm.org),
 the [LLD linker](https://lld.llvm.org), and more.
 
 ## Getting the Source Code and Building LLVM
+
+Run the following code in bash. (Tested on Ubuntu)
+```bash
+cmake -S llvm -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_UTILS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_ENABLE_NEW_PASS_MANAGER=OFF
+cmake --build build --parallel $(nproc --all)
+```
+You may need to pass extra arguments to cmake if you are using Mac.
 
 Consult the
 [Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm)
